@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Keep this file up to date.** Whenever you make a change worth noting — new commands, architecture decisions, IPC additions, navigation quirks, data conventions — add it here before finishing the task.
+
 ## Commands
 
 ```bash
@@ -27,7 +29,7 @@ Rust backend is built/run via `npm run tauri dev` — there is no separate `carg
 
 This is a **Tauri v2 desktop app** with two distinct layers:
 
-**Frontend** (`src/`): SvelteKit in **SPA mode** (SSR disabled, `adapter-static` with `fallback: "index.html"`). Svelte 5 runes syntax (`$state`, etc.) is used. All routes live under `src/routes/`. There is no server-side code — SvelteKit is used purely as a client-side framework bundled by Vite.
+**Frontend** (`src/`): SvelteKit in **SPA mode** (SSR disabled, `adapter-static` with `fallback: "index.html"`). Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, etc.) is used throughout. All routes live under `src/routes/`. There is no server-side code — SvelteKit is used purely as a client-side framework bundled by Vite.
 
 **Backend** (`src-tauri/`): Rust crate (`veggieloops_lib`). The Tauri app is initialized in `src-tauri/src/lib.rs`; `main.rs` just calls `veggieloops_lib::run()`. Tauri commands are defined with `#[tauri::command]` in `lib.rs` and registered via `invoke_handler`. The frontend calls them with `invoke("command_name", { args })` from `@tauri-apps/api/core`.
 
@@ -35,16 +37,49 @@ This is a **Tauri v2 desktop app** with two distinct layers:
 
 Vite is fixed to port **1420** (required by Tauri's `devUrl` config) — the port must be available when running dev.
 
+## Navigation
+
+**Do not use `goto` from `$app/navigation` for cross-page navigation.** In Tauri's WebView with `adapter-static`, `goto` can silently fail when the target route isn't hydrated in the current router instance.
+
+Use `window.location.href` instead:
+```ts
+window.location.href = `/project?name=${encodeURIComponent(name)}`;
+window.location.href = '/';
+```
+
+Read URL params with `new URLSearchParams(window.location.search).get('name')` rather than `$page.url.searchParams`.
+
 ## Data storage
 
-All app data lives under `data/` in the project root (i.e. `VeggieLoops/data/`). The Rust backend resolves this as `std::env::current_dir()/data/` — in dev mode (`npm run tauri dev`) the cwd is the project root.
+All app data lives under `data/` in the project root (`VeggieLoops/data/`). The Rust backend resolves this via `projects_root()` in `lib.rs`, which calls `std::env::current_dir()` and steps up one level if the cwd is `src-tauri/` (which it is during `tauri dev`).
 
-- **Projects**: `data/projects/<project-name>/` — one folder per project, created by the `create_project` Tauri command.
+- **Projects**: `data/projects/<project-name>/` — one folder per project.
 
-## Project creation flow
+## Tauri commands
 
-1. User clicks **New Project** on the home screen.
-2. An in-page modal (Svelte component, no new Tauri window) prompts for a project name.
-3. On confirm, `invoke('create_project', { name })` creates `data/projects/<name>/`.
-4. The app navigates to `/project?name=<name>` via `goto`.
-5. The project page reads the name from URL params and sets the OS window title via `getCurrentWindow().setTitle(name)` (`@tauri-apps/api/window`).
+All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_handler!`.
+
+| Command | Args | Returns | Description |
+|---|---|---|---|
+| `list_projects` | — | `Vec<String>` | Sorted list of project folder names |
+| `create_project` | `name: String` | `()` | Creates `data/projects/<name>/` |
+| `list_project_files` | `name: String` | `Vec<FileNode>` | Recursive file tree for a project (dirs first, max depth 10) |
+
+`FileNode` is `{ name: String, is_dir: bool, children: Vec<FileNode> }`.
+
+## Routes
+
+### `/` — Home screen (`src/routes/+page.svelte`)
+- Sidebar with Projects / Customize / Plugins / Learn navigation.
+- Projects panel: search bar, scrollable project list (loads via `list_projects` on mount), empty state when no projects exist.
+- **New Project** button opens an in-page modal (not a new Tauri window) where the user names the project. On confirm, `create_project` is invoked and the app navigates to the project page.
+- Window size: default 800×600 (set in `tauri.conf.json`).
+
+### `/project` — Project workspace (`src/routes/project/+page.svelte`)
+- URL param: `?name=<project-name>` (read via `new URLSearchParams(window.location.search)`).
+- On mount: sets the OS window title to the project name and maximizes the window.
+- **Menu bar** (top, full width): leaf logo + File / Edit / Tools / Options / Help. File → "Exit project" unmaximizes, restores to 800×600, centers, then navigates home. Other menus are currently empty.
+- **Activity bar** (44px, left): Explorer toggle button — clicking it shows/hides the file explorer panel.
+- **File explorer** (220px): VSCode-style tree showing `data/projects/<name>/` contents. Folders are expandable/collapsible. Section header collapses the whole tree.
+- **Main area**: placeholder workspace content.
+- On exit: window is restored to 800×600 and centered before navigating home.

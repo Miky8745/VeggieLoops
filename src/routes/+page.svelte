@@ -1,9 +1,19 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
 
   let activeNav = $state<'projects' | 'customize' | 'plugins' | 'learn'>('projects');
 
+  // ── Project list ──
+  let projects = $state<string[]>([]);
+
+  async function loadProjects() {
+    projects = await invoke<string[]>('list_projects');
+  }
+
+  onMount(loadProjects);
+
+  // ── New-project modal ──
   let showModal = $state(false);
   let projectName = $state('');
   let creating = $state(false);
@@ -29,12 +39,16 @@
     try {
       await invoke('create_project', { name });
       showModal = false;
-      await goto(`/project?name=${encodeURIComponent(name)}`);
+      window.location.href = `/project?name=${encodeURIComponent(name)}`;
     } catch (err) {
       modalError = String(err);
     } finally {
       creating = false;
     }
+  }
+
+  function openProject(name: string) {
+    window.location.href = `/project?name=${encodeURIComponent(name)}`;
   }
 </script>
 
@@ -171,24 +185,38 @@
           />
         </div>
 
-        <div class="empty-state" aria-label="No recent projects">
-          <svg class="empty-illustration" width="88" height="88" viewBox="0 0 88 88" fill="none" aria-hidden="true">
-            <circle cx="44" cy="44" r="42" fill="currentColor" opacity="0.04"/>
-            <circle cx="44" cy="44" r="30" fill="currentColor" opacity="0.04"/>
-            <!-- Stem -->
-            <line x1="44" y1="70" x2="44" y2="38" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-            <!-- Left leaf -->
-            <path d="M44 52C44 52 32 50 27 42C27 42 36 37 44 44" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <!-- Right leaf -->
-            <path d="M44 45C44 45 56 40 61 32C61 32 52 28 44 37" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <!-- Ground dots -->
-            <circle cx="36" cy="72" r="1.5" fill="currentColor" opacity="0.2"/>
-            <circle cx="44" cy="74" r="1.5" fill="currentColor" opacity="0.2"/>
-            <circle cx="52" cy="72" r="1.5" fill="currentColor" opacity="0.2"/>
-          </svg>
-          <h2 class="empty-title">No recent projects</h2>
-          <p class="empty-sub">Create a new project or open a folder to get started.</p>
-        </div>
+        {#if projects.length === 0}
+          <div class="empty-state" aria-label="No recent projects">
+            <svg class="empty-illustration" width="88" height="88" viewBox="0 0 88 88" fill="none" aria-hidden="true">
+              <circle cx="44" cy="44" r="42" fill="currentColor" opacity="0.04"/>
+              <circle cx="44" cy="44" r="30" fill="currentColor" opacity="0.04"/>
+              <line x1="44" y1="70" x2="44" y2="38" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M44 52C44 52 32 50 27 42C27 42 36 37 44 44" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M44 45C44 45 56 40 61 32C61 32 52 28 44 37" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="36" cy="72" r="1.5" fill="currentColor" opacity="0.2"/>
+              <circle cx="44" cy="74" r="1.5" fill="currentColor" opacity="0.2"/>
+              <circle cx="52" cy="72" r="1.5" fill="currentColor" opacity="0.2"/>
+            </svg>
+            <h2 class="empty-title">No projects yet</h2>
+            <p class="empty-sub">Create a new project to get started.</p>
+          </div>
+        {:else}
+          <ul class="project-list" role="list">
+            {#each projects as name}
+              <li>
+                <button class="project-item" onclick={() => openProject(name)}>
+                  <svg class="project-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M2 4.5h5l1.5 1.5H14v7H2V4.5z"/>
+                  </svg>
+                  <span class="project-name">{name}</span>
+                  <svg class="project-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 2.5l4 3.5-4 3.5"/>
+                  </svg>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
     {:else}
       <div class="placeholder-panel">
@@ -202,13 +230,11 @@
       </div>
     {/if}
   </main>
-</div>
 
-{#if showModal}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="modal-backdrop" onclick={closeModal}>
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  {#if showModal}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="modal-backdrop" onclick={closeModal} role="presentation">
+    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
       <h2 id="modal-title" class="modal-title">New Project</h2>
 
       <div class="modal-field">
@@ -236,7 +262,8 @@
       </div>
     </div>
   </div>
-{/if}
+  {/if}
+</div>
 
 <style>
   :global(*, *::before, *::after) {
@@ -591,6 +618,60 @@
     line-height: 1.55;
     max-width: 260px;
     color: var(--main-text-muted);
+  }
+
+  /* ── Project list ── */
+
+  .project-list {
+    list-style: none;
+    padding: 10px 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .project-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 13.5px;
+    color: var(--main-text);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+  }
+
+  .project-item:hover {
+    background: var(--btn-hover);
+  }
+
+  .project-icon {
+    flex-shrink: 0;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+
+  .project-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .project-arrow {
+    flex-shrink: 0;
+    color: var(--main-text-muted);
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+
+  .project-item:hover .project-arrow {
+    opacity: 1;
   }
 
   /* ── Placeholder for other panels ── */
