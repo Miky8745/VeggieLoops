@@ -1,680 +1,111 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { LogicalSize } from '@tauri-apps/api/dpi';
+  import Sidebar from '$lib/components/Sidebar.svelte';
+  import ProjectsPanel from '$lib/components/ProjectsPanel.svelte';
+  import NewProjectModal from '$lib/components/NewProjectModal.svelte';
+  import MenuBar from '$lib/components/MenuBar.svelte';
+  import FileExplorer from '$lib/components/FileExplorer.svelte';
+  import type { FileNode } from '$lib/types';
 
-  let activeNav = $state<'projects' | 'customize' | 'plugins' | 'learn'>('projects');
+  type View = 'home' | 'project';
+  type NavKey = 'projects' | 'customize' | 'plugins' | 'learn';
 
-  // ── Project list ──
+  let view = $state<View>('home');
+  let activeNav = $state<NavKey>('projects');
   let projects = $state<string[]>([]);
-
-  async function loadProjects() {
-    projects = await invoke<string[]>('list_projects');
-  }
-
-  onMount(loadProjects);
-
-  // ── New-project modal ──
   let showModal = $state(false);
   let projectName = $state('');
-  let creating = $state(false);
-  let modalError = $state('');
-  let inputEl = $state<HTMLInputElement | null>(null);
+  let fileTree = $state<FileNode[]>([]);
 
-  function openModal() {
-    projectName = '';
-    modalError = '';
-    showModal = true;
-    setTimeout(() => inputEl?.focus(), 30);
-  }
-
-  function closeModal() {
-    if (!creating) showModal = false;
-  }
-
-  async function handleCreate() {
-    const name = projectName.trim();
-    if (!name) { modalError = 'Please enter a project name.'; return; }
-    creating = true;
-    modalError = '';
+  async function openProject(name: string) {
+    const win = getCurrentWindow();
     try {
-      await invoke('create_project', { name });
-      showModal = false;
-      window.location.href = `/project?name=${encodeURIComponent(name)}`;
-    } catch (err) {
-      modalError = String(err);
-    } finally {
-      creating = false;
-    }
+      await win.setTitle(name);
+      await win.maximize();
+    } catch (_) {}
+    fileTree = await invoke<FileNode[]>('list_data_files');
+    projectName = name;
+    view = 'project';
   }
 
-  function openProject(name: string) {
-    window.location.href = `/project?name=${encodeURIComponent(name)}`;
+  async function exitProject() {
+    const win = getCurrentWindow();
+    try {
+      await win.unmaximize();
+      await win.setSize(new LogicalSize(800, 600));
+      await win.center();
+      await win.setTitle('VeggieLoops');
+    } catch (_) {}
+    view = 'home';
   }
+
+  const menus = [
+    { name: 'File',    items: [{ label: 'Exit project', action: exitProject }] },
+    { name: 'Edit',    items: [] },
+    { name: 'Tools',   items: [] },
+    { name: 'Options', items: [] },
+    { name: 'Help',    items: [] },
+  ];
+
+  onMount(async () => {
+    projects = await invoke<string[]>('list_projects');
+  });
 </script>
 
-<svelte:head>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
-</svelte:head>
-
-<div class="app">
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <div class="logo">
-        <svg class="logo-leaf" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-          <path d="M15 3C15 3 5 9.5 5 19C5 24.523 9.2 26.5 15 26.5C20.8 26.5 25 24.523 25 19C25 9.5 15 3 15 3Z" fill="#5BAD5B"/>
-          <line x1="15" y1="26.5" x2="15" y2="13" stroke="#2E7D32" stroke-width="1.6" stroke-linecap="round"/>
-          <line x1="15" y1="20" x2="19.5" y2="15.5" stroke="#2E7D32" stroke-width="1.6" stroke-linecap="round"/>
-          <line x1="15" y1="16.5" x2="10.5" y2="13" stroke="#2E7D32" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
-        <div class="logo-text">
-          <span class="logo-name">VeggieLoops</span>
-          <span class="logo-version">v 0.1.0</span>
-        </div>
-      </div>
-    </div>
-
-    <nav class="sidebar-nav" aria-label="Main navigation">
-      <button
-        class="nav-item"
-        class:active={activeNav === 'projects'}
-        onclick={() => activeNav = 'projects'}
-      >
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="1" y="4.5" width="13" height="9" rx="1.2"/>
-          <path d="M1 7.5h13"/>
-          <path d="M5 4.5V3a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v1.5"/>
-        </svg>
-        <span>Projects</span>
-      </button>
-
-      <button
-        class="nav-item"
-        class:active={activeNav === 'customize'}
-        onclick={() => activeNav = 'customize'}
-      >
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7.5 1.5a6 6 0 1 0 0 12c.83 0 1.25-.37 1.25-.87 0-.22-.08-.4-.17-.58-.09-.17-.17-.36-.17-.58 0-.5.41-.87.87-.87h1a3.29 3.29 0 0 0 3.27-3.5A6 6 0 0 0 7.5 1.5z"/>
-          <circle cx="4.5" cy="6" r=".75" fill="currentColor" stroke="none"/>
-          <circle cx="7.5" cy="3.75" r=".75" fill="currentColor" stroke="none"/>
-          <circle cx="10.5" cy="6" r=".75" fill="currentColor" stroke="none"/>
-        </svg>
-        <span>Customize</span>
-      </button>
-
-      <button
-        class="nav-item"
-        class:active={activeNav === 'plugins'}
-        onclick={() => activeNav = 'plugins'}
-      >
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="5" height="5" rx="1"/>
-          <rect x="8.5" y="1.5" width="5" height="5" rx="1"/>
-          <rect x="1.5" y="8.5" width="5" height="5" rx="1"/>
-          <path d="M11 8.5v4.5M8.5 11H13"/>
-        </svg>
-        <span>Plugins</span>
-      </button>
-
-      <button
-        class="nav-item"
-        class:active={activeNav === 'learn'}
-        onclick={() => activeNav = 'learn'}
-      >
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M2 2.5h9.5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/>
-          <path d="M7.5 2.5v10"/>
-          <path d="M4 5.5h2M4 7.5h2"/>
-        </svg>
-        <span>Learn</span>
-      </button>
-    </nav>
-
-    <div class="sidebar-footer">
-      <button class="footer-btn" title="Settings" aria-label="Settings">
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
-          <circle cx="7.5" cy="7.5" r="2"/>
-          <path d="M7.5 1v1.2M7.5 12.8V14M1 7.5h1.2M12.8 7.5H14M2.93 2.93l.85.85M11.22 11.22l.85.85M2.93 12.07l.85-.85M11.22 3.78l.85-.85"/>
-        </svg>
-        <span>Settings</span>
-      </button>
-    </div>
-  </aside>
-
-  <main class="main">
-    {#if activeNav === 'projects'}
-      <div class="projects-panel">
-        <div class="panel-header">
-          <h1 class="panel-title">Projects</h1>
-          <div class="action-group">
-            <button class="btn btn-primary" aria-label="New Project" onclick={openModal}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M6.5 1v11M1 6.5h11"/>
-              </svg>
-              New Project
-            </button>
-            <button class="btn btn-secondary" aria-label="Open project folder">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M1 3.5h4l1.5 1.5H12v6H1V3.5z"/>
-              </svg>
-              Open
-            </button>
-            <button class="btn btn-secondary" aria-label="Get from version control">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="3.5" cy="3" r="1.5"/>
-                <circle cx="9.5" cy="3" r="1.5"/>
-                <circle cx="6.5" cy="10" r="1.5"/>
-                <path d="M3.5 4.5v2.5L6.5 8.5M9.5 4.5v2.5L6.5 8.5"/>
-              </svg>
-              Get from VCS
-            </button>
-          </div>
-        </div>
-
-        <div class="search-bar">
-          <svg class="search-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-            <circle cx="5.5" cy="5.5" r="4"/>
-            <path d="M8.5 8.5l3 3"/>
-          </svg>
-          <input
-            type="search"
-            class="search-input"
-            placeholder="Search projects…"
-            aria-label="Search projects"
-          />
-        </div>
-
-        {#if projects.length === 0}
-          <div class="empty-state" aria-label="No recent projects">
-            <svg class="empty-illustration" width="88" height="88" viewBox="0 0 88 88" fill="none" aria-hidden="true">
-              <circle cx="44" cy="44" r="42" fill="currentColor" opacity="0.04"/>
-              <circle cx="44" cy="44" r="30" fill="currentColor" opacity="0.04"/>
-              <line x1="44" y1="70" x2="44" y2="38" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-              <path d="M44 52C44 52 32 50 27 42C27 42 36 37 44 44" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M44 45C44 45 56 40 61 32C61 32 52 28 44 37" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="36" cy="72" r="1.5" fill="currentColor" opacity="0.2"/>
-              <circle cx="44" cy="74" r="1.5" fill="currentColor" opacity="0.2"/>
-              <circle cx="52" cy="72" r="1.5" fill="currentColor" opacity="0.2"/>
+{#if view === 'home'}
+  <div class="app">
+    <Sidebar bind:activeNav />
+    <main class="main">
+      {#if activeNav === 'projects'}
+        <ProjectsPanel {projects} onNewProject={() => showModal = true} onOpenProject={openProject} />
+      {:else}
+        <div class="placeholder-panel">
+          <div class="placeholder-content">
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.2" aria-hidden="true">
+              <rect x="4" y="4" width="44" height="44" rx="10"/>
+              <path d="M18 26h16M26 18v16"/>
             </svg>
-            <h2 class="empty-title">No projects yet</h2>
-            <p class="empty-sub">Create a new project to get started.</p>
+            <p class="coming-soon-label">Coming Soon</p>
           </div>
-        {:else}
-          <ul class="project-list" role="list">
-            {#each projects as name}
-              <li>
-                <button class="project-item" onclick={() => openProject(name)}>
-                  <svg class="project-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M2 4.5h5l1.5 1.5H14v7H2V4.5z"/>
-                  </svg>
-                  <span class="project-name">{name}</span>
-                  <svg class="project-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M4 2.5l4 3.5-4 3.5"/>
-                  </svg>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-    {:else}
-      <div class="placeholder-panel">
-        <div class="placeholder-content">
-          <svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.2" aria-hidden="true">
-            <rect x="4" y="4" width="44" height="44" rx="10"/>
-            <path d="M18 26h16M26 18v16"/>
-          </svg>
-          <p class="placeholder-label">Coming Soon</p>
         </div>
-      </div>
-    {/if}
-  </main>
-
-  {#if showModal}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div class="modal-backdrop" onclick={closeModal} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-      <h2 id="modal-title" class="modal-title">New Project</h2>
-
-      <div class="modal-field">
-        <label for="project-name" class="modal-label">Project name</label>
-        <input
-          id="project-name"
-          type="text"
-          class="modal-input"
-          bind:this={inputEl}
-          bind:value={projectName}
-          placeholder="My Veggie Loop"
-          autocomplete="off"
-          onkeydown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') closeModal(); }}
-        />
-        {#if modalError}
-          <p class="modal-error">{modalError}</p>
-        {/if}
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick={closeModal} disabled={creating}>Cancel</button>
-        <button class="btn btn-primary" onclick={handleCreate} disabled={creating}>
-          {creating ? 'Creating…' : 'Create'}
-        </button>
-      </div>
+      {/if}
+    </main>
+    <NewProjectModal bind:show={showModal} onCreated={openProject} />
+  </div>
+{:else}
+  <div class="workspace">
+    <MenuBar {menus} />
+    <div class="body">
+      <FileExplorer {fileTree} />
+      <main class="main">
+        <div class="main-header">
+          <h1 class="main-title">{projectName}</h1>
+        </div>
+        <div class="placeholder">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.2" aria-hidden="true">
+            <rect x="4" y="4" width="48" height="48" rx="12"/>
+            <path d="M20 28h16M28 20v16"/>
+          </svg>
+          <p class="placeholder-label">Workspace ready</p>
+          <p class="placeholder-sub">Start building your veggie loop.</p>
+        </div>
+      </main>
     </div>
   </div>
-  {/if}
-</div>
+{/if}
 
 <style>
-  :global(*, *::before, *::after) {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  :global(html, body) {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  :global(#svelte) {
-    height: 100%;
-  }
-
+  /* ── Home view ─────────────────────────────── */
   .app {
     display: flex;
     height: 100vh;
     font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
-
-    /* Light mode tokens */
-    --sidebar-bg: #1B2E1B;
-    --sidebar-text: #8DB08D;
-    --sidebar-hover: #243824;
-    --sidebar-active-bg: #2E4A2E;
-    --sidebar-active-text: #E4F2E4;
-    --sidebar-border: #233323;
-    --main-bg: #F5F8F5;
-    --main-text: #182E18;
-    --main-text-muted: #6A8A6A;
-    --main-border: #D6E8D6;
-    --accent: #3C8B3C;
-    --accent-hover: #2E7A2E;
-    --accent-text: #ffffff;
-    --btn-bg: #ffffff;
-    --btn-border: #C4DCC4;
-    --btn-text: #284228;
-    --btn-hover: #EDF5ED;
-    --search-bg: #ffffff;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
   }
-
-  @media (prefers-color-scheme: dark) {
-    .app {
-      --sidebar-bg: #152415;
-      --sidebar-text: #708E70;
-      --sidebar-hover: #1C331C;
-      --sidebar-active-bg: #264226;
-      --sidebar-active-text: #D0EAD0;
-      --sidebar-border: #1C301C;
-      --main-bg: #182818;
-      --main-text: #C4DCC4;
-      --main-text-muted: #5A7A5A;
-      --main-border: #274027;
-      --accent: #4DA84D;
-      --accent-hover: #5BB85B;
-      --accent-text: #ffffff;
-      --btn-bg: #223622;
-      --btn-border: #365636;
-      --btn-text: #B0CCB0;
-      --btn-hover: #2A462A;
-      --search-bg: #1E301E;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    }
-  }
-
-  /* ── Sidebar ── */
-
-  .sidebar {
-    width: 220px;
-    min-width: 220px;
-    background: var(--sidebar-bg);
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid var(--sidebar-border);
-    user-select: none;
-  }
-
-  .sidebar-header {
-    padding: 20px 16px 18px;
-    border-bottom: 1px solid var(--sidebar-border);
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .logo-leaf {
-    flex-shrink: 0;
-  }
-
-  .logo-text {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .logo-name {
-    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    font-size: 15px;
-    font-weight: 600;
-    color: #D8EED8;
-    letter-spacing: -0.01em;
-    line-height: 1.2;
-  }
-
-  .logo-version {
-    font-size: 10.5px;
-    color: var(--sidebar-text);
-    letter-spacing: 0.04em;
-    opacity: 0.8;
-  }
-
-  .sidebar-nav {
-    flex: 1;
-    padding: 8px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .nav-item {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 8px 16px;
-    border: none;
-    background: transparent;
-    color: var(--sidebar-text);
-    font-family: inherit;
-    font-size: 13.5px;
-    font-weight: 400;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.12s ease, color 0.12s ease;
-  }
-
-  .nav-item:hover {
-    background: var(--sidebar-hover);
-    color: #B8D0B8;
-  }
-
-  .nav-item.active {
-    background: var(--sidebar-active-bg);
-    color: var(--sidebar-active-text);
-    font-weight: 500;
-  }
-
-  .nav-item.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 5px;
-    bottom: 5px;
-    width: 3px;
-    background: var(--accent);
-    border-radius: 0 2px 2px 0;
-  }
-
-  .nav-item svg {
-    flex-shrink: 0;
-    opacity: 0.7;
-    transition: opacity 0.12s;
-  }
-
-  .nav-item:hover svg,
-  .nav-item.active svg {
-    opacity: 1;
-  }
-
-  .sidebar-footer {
-    padding: 10px 10px;
-    border-top: 1px solid var(--sidebar-border);
-  }
-
-  .footer-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 8px;
-    border: none;
-    background: transparent;
-    color: var(--sidebar-text);
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    border-radius: 6px;
-    width: 100%;
-    transition: background 0.12s, color 0.12s;
-  }
-
-  .footer-btn:hover {
-    background: var(--sidebar-hover);
-    color: #B8D0B8;
-  }
-
-  /* ── Main panel ── */
-
-  .main {
-    flex: 1;
-    background: var(--main-bg);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-  }
-
-  .projects-panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-  }
-
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--main-border);
-    gap: 16px;
-  }
-
-  .panel-title {
-    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--main-text);
-    white-space: nowrap;
-  }
-
-  .action-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
-    border: 1px solid transparent;
-    white-space: nowrap;
-    line-height: 1;
-  }
-
-  .btn:active {
-    transform: translateY(1px);
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: var(--accent-text);
-    border-color: var(--accent);
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
-  }
-
-  .btn-secondary {
-    background: var(--btn-bg);
-    color: var(--btn-text);
-    border-color: var(--btn-border);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .btn-secondary:hover {
-    background: var(--btn-hover);
-  }
-
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 12px 20px 0;
-    padding: 7px 12px;
-    background: var(--search-bg);
-    border: 1px solid var(--main-border);
-    border-radius: 7px;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .search-icon {
-    color: var(--main-text-muted);
-    flex-shrink: 0;
-  }
-
-  .search-input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-family: inherit;
-    font-size: 13px;
-    color: var(--main-text);
-    outline: none;
-  }
-
-  .search-input::placeholder {
-    color: var(--main-text-muted);
-  }
-
-  /* Clear button on search in Chrome/Safari */
-  .search-input::-webkit-search-cancel-button {
-    opacity: 0.4;
-    cursor: pointer;
-  }
-
-  .empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 48px 32px;
-    text-align: center;
-    color: var(--main-text-muted);
-  }
-
-  .empty-illustration {
-    margin-bottom: 8px;
-    color: var(--main-text-muted);
-  }
-
-  .empty-title {
-    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--main-text);
-    opacity: 0.5;
-    margin-bottom: 2px;
-  }
-
-  .empty-sub {
-    font-size: 13px;
-    line-height: 1.55;
-    max-width: 260px;
-    color: var(--main-text-muted);
-  }
-
-  /* ── Project list ── */
-
-  .project-list {
-    list-style: none;
-    padding: 10px 16px;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .project-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 9px 12px;
-    border: none;
-    background: transparent;
-    border-radius: 7px;
-    font-family: inherit;
-    font-size: 13.5px;
-    color: var(--main-text);
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.1s;
-  }
-
-  .project-item:hover {
-    background: var(--btn-hover);
-  }
-
-  .project-icon {
-    flex-shrink: 0;
-    color: var(--accent);
-    opacity: 0.8;
-  }
-
-  .project-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .project-arrow {
-    flex-shrink: 0;
-    color: var(--main-text-muted);
-    opacity: 0;
-    transition: opacity 0.1s;
-  }
-
-  .project-item:hover .project-arrow {
-    opacity: 1;
-  }
-
-  /* ── Placeholder for other panels ── */
 
   .placeholder-panel {
     flex: 1;
@@ -691,82 +122,66 @@
     gap: 10px;
   }
 
-  .placeholder-label {
+  .coming-soon-label {
     font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--main-text-muted);
   }
 
-  /* ── New-project modal ── */
-
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    backdrop-filter: blur(2px);
-  }
-
-  .modal {
-    background: var(--main-bg);
-    border: 1px solid var(--main-border);
-    border-radius: 10px;
-    padding: 24px;
-    width: 360px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+  /* ── Project view ──────────────────────────── */
+  .workspace {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    height: 100vh;
+    font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
   }
 
-  .modal-title {
+  .body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+  .main-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--main-border);
+    flex-shrink: 0;
+  }
+
+  .main-title {
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--main-text);
   }
 
-  .modal-field {
+  .placeholder {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--main-muted);
+    text-align: center;
   }
 
-  .modal-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--main-text-muted);
-    letter-spacing: 0.03em;
-  }
-
-  .modal-input {
-    padding: 8px 12px;
-    background: var(--search-bg);
-    border: 1px solid var(--main-border);
-    border-radius: 7px;
-    font-family: inherit;
-    font-size: 13.5px;
+  .placeholder-label {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--main-text);
-    outline: none;
-    transition: border-color 0.12s;
+    opacity: 0.4;
   }
 
-  .modal-input:focus {
-    border-color: var(--accent);
-  }
+  .placeholder-sub { font-size: 13px; color: var(--main-muted); }
 
-  .modal-error {
-    font-size: 12px;
-    color: #c0392b;
-  }
-
-  .modal-actions {
+  /* ── Shared ────────────────────────────────── */
+  .main {
+    flex: 1;
+    background: var(--main-bg);
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
   }
 </style>

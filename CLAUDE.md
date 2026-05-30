@@ -25,6 +25,10 @@ npm run build
 
 Rust backend is built/run via `npm run tauri dev` — there is no separate `cargo run` entry point for the app. To check Rust code in isolation: `cd src-tauri && cargo check`.
 
+## Code style
+
+**Prefer many small files over few large ones.** If a component, helper, or type block is getting long, extract it into its own file without hesitation. Route pages should be thin coordinators — logic and UI belong in focused components under `src/lib/`.
+
 ## Architecture
 
 This is a **Tauri v2 desktop app** with two distinct layers:
@@ -37,17 +41,32 @@ This is a **Tauri v2 desktop app** with two distinct layers:
 
 Vite is fixed to port **1420** (required by Tauri's `devUrl` config) — the port must be available when running dev.
 
-## Navigation
+## Frontend structure
 
-**Do not use `goto` from `$app/navigation` for cross-page navigation.** In Tauri's WebView with `adapter-static`, `goto` can silently fail when the target route isn't hydrated in the current router instance.
-
-Use `window.location.href` instead:
-```ts
-window.location.href = `/project?name=${encodeURIComponent(name)}`;
-window.location.href = '/';
+```
+src/
+  app.html                   — HTML template; holds global CSS reset + design tokens (loads before any JS)
+  app.css                    — reference copy of design tokens (not imported anywhere)
+  routes/
+    +layout.svelte           — pass-through layout (no styles; fonts + reset are in app.html)
+    +page.svelte             — single page managing both home and project views (~180 lines)
+  lib/
+    types.ts                 — shared TS interfaces: FileNode, FlatNode, MenuItem
+    components/
+      Sidebar.svelte         — home sidebar: logo, nav, settings footer
+      ProjectsPanel.svelte   — projects list, search, empty state, action buttons
+      NewProjectModal.svelte — new-project form modal (owns its own state + invoke)
+      MenuBar.svelte         — project page menu bar with dropdowns
+      FileExplorer.svelte    — activity bar + explorer panel + file tree
 ```
 
-Read URL params with `new URLSearchParams(window.location.search).get('name')` rather than `$page.url.searchParams`.
+CSS custom properties (design tokens) live in `app.html`'s `<style>` tag so they are available synchronously before any JS runs. New components should use `var(--token)` rather than hardcoding colors.
+
+## Navigation
+
+**There is no cross-page navigation.** Both the home view and the project workspace live in `src/routes/+page.svelte` and are toggled via a `view` state variable (`'home' | 'project'`). This avoids Vite dev-mode CSS race conditions caused by full page reloads.
+
+**Do not add `window.location.href` navigation or `goto()` calls** to switch between home and project — mutate `view` instead and call the Tauri window APIs (maximize/restore/setTitle) directly in the transition functions `openProject` / `exitProject`.
 
 ## Data storage
 
@@ -68,19 +87,17 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 
 `FileNode` is `{ name: String, is_dir: bool, children: Vec<FileNode> }`.
 
-## Routes
+## Views (both in `src/routes/+page.svelte`)
 
-### `/` — Home screen (`src/routes/+page.svelte`)
+### Home view (`view === 'home'`)
 - Sidebar with Projects / Customize / Plugins / Learn navigation.
 - Projects panel: search bar, scrollable project list (loads via `list_projects` on mount), empty state when no projects exist.
-- **New Project** button opens an in-page modal (not a new Tauri window) where the user names the project. On confirm, `create_project` is invoked and the app navigates to the project page.
-- Window size: default 800×600 (set in `tauri.conf.json`).
+- **New Project** button opens an in-page modal. On confirm, `create_project` is invoked then `openProject()` is called to switch to the project view.
+- Window size: 800×600 (set in `tauri.conf.json`).
 
-### `/project` — Project workspace (`src/routes/project/+page.svelte`)
-- URL param: `?name=<project-name>` (read via `new URLSearchParams(window.location.search)`).
-- On mount: sets the OS window title to the project name and maximizes the window.
-- **Menu bar** (top, full width): leaf logo + File / Edit / Tools / Options / Help. File → "Exit project" unmaximizes, restores to 800×600, centers, then navigates home. Other menus are currently empty.
-- **Activity bar** (44px, left): Explorer toggle button — clicking it shows/hides the file explorer panel.
-- **File explorer** (220px): VSCode-style tree showing the entire `data/` directory (via `list_data_files`). Folders are expandable/collapsible. Section header labelled "DATA" collapses the whole tree.
+### Project view (`view === 'project'`)
+- Entered via `openProject(name)`: sets window title, maximizes, loads file tree, sets `view = 'project'`.
+- **Menu bar** (top, full width): leaf logo + File / Edit / Tools / Options / Help. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
+- **Activity bar** (44px, left): Explorer toggle button.
+- **File explorer** (220px): VSCode-style tree for the entire `data/` directory (via `list_data_files`). Folders are expandable/collapsible; section header "DATA" collapses the tree.
 - **Main area**: placeholder workspace content.
-- On exit: window is restored to 800×600 and centered before navigating home.
