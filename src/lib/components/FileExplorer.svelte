@@ -148,6 +148,7 @@
                 style="padding-left: {10 + flat.depth * 16 + 13}px"
                 role="treeitem"
                 aria-selected={false}
+                tabindex="0"
                 onpointerdown={(e) => onFilePointerDown(e, flat.node.name)}
               >
                 <svg class="item-icon item-icon--file" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
