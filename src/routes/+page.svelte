@@ -9,6 +9,7 @@
   import MenuBar from '$lib/components/MenuBar.svelte';
   import FileExplorer from '$lib/components/FileExplorer.svelte';
   import Playlist from '$lib/components/Playlist.svelte';
+  import ChannelRack from '$lib/components/ChannelRack.svelte';
   import type { FileNode } from '$lib/types';
 
   type View = 'home' | 'project';
@@ -20,6 +21,8 @@
   let showModal = $state(false);
   let projectName = $state('');
   let fileTree = $state<FileNode[]>([]);
+  let showPlaylist = $state(true);
+  let showChannelRack = $state(false);
 
   async function openProject(name: string) {
     const win = getCurrentWindow();
@@ -78,16 +81,43 @@
   </div>
 {:else}
   <div class="workspace">
-    <MenuBar {menus} />
+    <!-- Top: all controls live here — menus, toolbar buttons, info display -->
+    <div class="top-bar">
+      <div class="control-strip">
+        <div class="control-row">
+          <MenuBar {menus} />
+          <div class="tb-sep" role="separator" aria-orientation="vertical"></div>
+          <button
+            class="tb-btn"
+            class:tb-btn--active={showPlaylist}
+            onclick={() => { showPlaylist = !showPlaylist; }}
+          >Playlist</button>
+          <button
+            class="tb-btn"
+            class:tb-btn--active={showChannelRack}
+            onclick={() => { showChannelRack = true; }}
+          >Channel Rack</button>
+          <button class="tb-btn" disabled>Placeholder A</button>
+          <button class="tb-btn" disabled>Placeholder B</button>
+        </div>
+        <div class="info-box">
+          <span class="info-line">test</span>
+          <span class="info-line">test</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Body: left panel + workspace -->
     <div class="body">
       <FileExplorer {fileTree} />
       <main class="main">
-        <div class="main-header">
-          <h1 class="main-title">{projectName}</h1>
-        </div>
-        <Playlist />
+        {#if showPlaylist}
+          <Playlist />
+        {/if}
       </main>
     </div>
+
+    <ChannelRack bind:show={showChannelRack} />
   </div>
 {/if}
 
@@ -133,20 +163,89 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  /* Top bar: full-width container, background + bottom border */
+  .top-bar {
+    background: var(--sidebar-bg);
+    border-bottom: 1px solid var(--sidebar-border);
+    flex-shrink: 0;
+    user-select: none;
+  }
 
-  .main-header {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--main-border);
+  /* control-strip: only as wide as its content */
+  .control-strip {
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+  }
+
+  /* Row 1: logo + menus + separator + toolbar buttons */
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    padding: 0 8px;
+  }
+
+  .tb-sep {
+    width: 1px;
+    height: 14px;
+    background: var(--sidebar-border);
+    margin: 0 6px;
     flex-shrink: 0;
   }
 
-  .main-title {
-    font-family: 'Playfair Display', Georgia, serif;
-    font-size: 17px;
-    font-weight: 600;
+  .tb-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    color: var(--btn-text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    line-height: 1;
+  }
+
+  .tb-btn:hover:not(:disabled) {
+    background: var(--btn-hover);
     color: var(--main-text);
   }
+
+  .tb-btn--active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .tb-btn--active:hover {
+    background: rgba(224, 120, 0, 0.08);
+  }
+
+  .tb-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  /* Row 2: 2-line info box — same section as the control row */
+  .info-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    padding: 3px 8px 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .info-line {
+    font-size: 10.5px;
+    font-family: 'DM Mono', 'Cascadia Code', 'Consolas', monospace;
+    color: var(--main-text-muted);
+    line-height: 1.3;
+  }
+
+  /* Body: file explorer + workspace side by side */
+  .body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
   /* ── Shared ────────────────────────────────── */
   .main {

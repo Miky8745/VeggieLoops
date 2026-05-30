@@ -17,54 +17,40 @@
   });
 </script>
 
-<header class="menu-bar">
-  <svg class="menu-logo" width="16" height="16" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-    <path d="M15 3C15 3 5 9.5 5 19C5 24.523 9.2 26.5 15 26.5C20.8 26.5 25 24.523 25 19C25 9.5 15 3 15 3Z" fill="#E07800"/>
-    <line x1="15" y1="26.5" x2="15" y2="13" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
-    <line x1="15" y1="20" x2="19.5" y2="15.5" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
-    <line x1="15" y1="16.5" x2="10.5" y2="13" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
-  </svg>
+<svg class="menu-logo" width="16" height="16" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+  <path d="M15 3C15 3 5 9.5 5 19C5 24.523 9.2 26.5 15 26.5C20.8 26.5 25 24.523 25 19C25 9.5 15 3 15 3Z" fill="#E07800"/>
+  <line x1="15" y1="26.5" x2="15" y2="13" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="15" y1="20" x2="19.5" y2="15.5" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="15" y1="16.5" x2="10.5" y2="13" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
+</svg>
 
-  {#each menus as menu}
-    <div class="menu-entry">
-      <button
-        class="menu-btn"
-        class:menu-btn--open={openMenu === menu.name}
-        onclick={(e) => { e.stopPropagation(); openMenu = openMenu === menu.name ? null : menu.name; }}
-      >{menu.name}</button>
+{#each menus as menu}
+  <div class="menu-entry">
+    <button
+      class="menu-btn"
+      class:menu-btn--open={openMenu === menu.name}
+      onclick={(e) => { e.stopPropagation(); openMenu = openMenu === menu.name ? null : menu.name; }}
+    >{menu.name}</button>
 
-      {#if openMenu === menu.name && menu.items.length > 0}
-        <div
-          class="menu-dropdown"
-          role="menu"
-          tabindex="-1"
-          onclick={(e) => e.stopPropagation()}
-          onkeydown={(e) => e.stopPropagation()}
-        >
-          {#each menu.items as item}
-            <button class="menu-item" onclick={() => { openMenu = null; item.action(); }}>
-              {item.label}
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  {/each}
-</header>
+    {#if openMenu === menu.name && menu.items.length > 0}
+      <div
+        class="menu-dropdown"
+        role="menu"
+        tabindex="-1"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+      >
+        {#each menu.items as item}
+          <button class="menu-item" onclick={() => { openMenu = null; item.action(); }}>
+            {item.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/each}
 
 <style>
-  .menu-bar {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    height: 30px;
-    padding: 0 8px;
-    background: var(--sidebar-bg);
-    border-bottom: 1px solid var(--sidebar-border);
-    flex-shrink: 0;
-    user-select: none;
-  }
-
   .menu-logo { margin-right: 6px; flex-shrink: 0; }
 
   .menu-entry { position: relative; }

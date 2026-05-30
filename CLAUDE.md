@@ -56,9 +56,10 @@ src/
       Sidebar.svelte         — home sidebar: logo, nav, settings footer
       ProjectsPanel.svelte   — projects list, search, empty state, action buttons
       NewProjectModal.svelte — new-project form modal (owns its own state + invoke)
-      MenuBar.svelte         — project page menu bar with dropdowns
+      MenuBar.svelte         — project page menu fragment (no wrapper element): logo SVG + File/Edit/… dropdowns. Rendered as flex children inside .control-row in +page.svelte.
       FileExplorer.svelte    — activity bar + explorer panel + file tree
       Playlist.svelte        — FL Studio-style playlist grid (tracks × bars, 4/4 shading, sticky headers)
+      ChannelRack.svelte     — in-app modal for the channel rack (blank placeholder, toggled from toolbar)
 ```
 
 CSS custom properties (design tokens) live in `app.html`'s `<style>` tag so they are available synchronously before any JS runs. New components should use `var(--token)` rather than hardcoding colors.
@@ -98,8 +99,29 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 - Window size: 800×600 (set in `tauri.conf.json`).
 
 ### Project view (`view === 'project'`)
-- Entered via `openProject(name)`: sets window title, maximizes, loads file tree, sets `view = 'project'`.
-- **Menu bar** (top, full width): leaf logo + File / Edit / Tools / Options / Help. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
-- **Activity bar** (44px, left): Explorer toggle button.
-- **File explorer** (220px): VSCode-style tree for the entire `data/` directory (via `list_data_files`). Folders are expandable/collapsible; section header "DATA" collapses the tree.
-- **Main area**: `Playlist` component — scrollable grid with 8 tracks × 64 bars. Track names are sticky-left; bar ruler is sticky-top. Groups of 4 bars alternate shade (`#1C1C1C` / `#222222`). `trackHeight`, `barWidth`, `barCount` are `$state` for future resize support.
+
+The workspace is divided into three fixed zones. **This hierarchy must be respected for all future additions.**
+
+```
+┌─────────────────────────────────────────────────────┐
+│  TOP BAR  (full width, --sidebar-bg)                │
+│  .control-strip (width: max-content)                │
+│    Row 1: [logo] [File][Edit]…[Help] | [Playlist]   │
+│           [Channel Rack] [Placeholder A/B]          │
+│    Row 2: 2-line info box (same width as row 1)     │
+├──────────┬──────────────────────────────────────────┤
+│  LEFT    │  WORKSPACE                               │
+│  File    │  (everything the user edits/plays with)  │
+│  explorer│                                          │
+│  + future│                                          │
+│  lists   │                                          │
+└──────────┴──────────────────────────────────────────┘
+```
+
+- **Top bar** — all controlling buttons and displays go here. The `MenuBar` component (a Svelte 5 fragment) provides the logo + menu entries; toolbar buttons (Playlist, Channel Rack, …) follow in the same row separated by a 1px divider. A 2-line info box below those buttons shows status/metadata. The info box must remain visually part of the top bar — same background, no contrasting color block — because introducing a distinct background would create a false new section.
+- **Left** — file explorer and any future list-type structures (mixer channels, sample browser, etc.).
+- **Workspace** — everything the user edits: playlist, piano roll, mixer, etc.
+
+**Never place controlling buttons or displays in the left or workspace zones.** New toolbar buttons belong in the top bar's `control-row` in `+page.svelte`; new left-panel structures belong inside/beside `FileExplorer.svelte`.
+
+Entered via `openProject(name)`: sets window title, maximizes, loads file tree, sets `view = 'project'`. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
