@@ -1,11 +1,14 @@
-fn projects_root() -> Result<std::path::PathBuf, String> {
+fn app_root() -> Result<std::path::PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let root = if cwd.file_name().and_then(|n| n.to_str()) == Some("src-tauri") {
+    Ok(if cwd.file_name().and_then(|n| n.to_str()) == Some("src-tauri") {
         cwd.parent().unwrap_or(&cwd).to_path_buf()
     } else {
         cwd
-    };
-    Ok(root.join("data").join("projects"))
+    })
+}
+
+fn projects_root() -> Result<std::path::PathBuf, String> {
+    Ok(app_root()?.join("data").join("projects"))
 }
 
 #[derive(serde::Serialize)]
@@ -44,6 +47,15 @@ fn read_dir_tree(dir: &std::path::Path, depth: usize) -> Result<Vec<FileNode>, S
 #[tauri::command]
 fn list_project_files(name: String) -> Result<Vec<FileNode>, String> {
     let path = projects_root()?.join(name.trim());
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    read_dir_tree(&path, 0)
+}
+
+#[tauri::command]
+fn list_data_files() -> Result<Vec<FileNode>, String> {
+    let path = app_root()?.join("data");
     if !path.exists() {
         return Ok(vec![]);
     }
@@ -95,6 +107,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_projects,
             list_project_files,
+            list_data_files,
             create_project
         ])
         .run(tauri::generate_context!())

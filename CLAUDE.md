@@ -51,7 +51,7 @@ Read URL params with `new URLSearchParams(window.location.search).get('name')` r
 
 ## Data storage
 
-All app data lives under `data/` in the project root (`VeggieLoops/data/`). The Rust backend resolves this via `projects_root()` in `lib.rs`, which calls `std::env::current_dir()` and steps up one level if the cwd is `src-tauri/` (which it is during `tauri dev`).
+All app data lives under `data/` in the project root (`VeggieLoops/data/`). The Rust backend resolves this via `app_root()` in `lib.rs`, which calls `std::env::current_dir()` and steps up one level if the cwd is `src-tauri/` (which it is during `tauri dev`). `projects_root()` calls `app_root()` and appends `data/projects/`.
 
 - **Projects**: `data/projects/<project-name>/` — one folder per project.
 
@@ -64,6 +64,7 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 | `list_projects` | — | `Vec<String>` | Sorted list of project folder names |
 | `create_project` | `name: String` | `()` | Creates `data/projects/<name>/` |
 | `list_project_files` | `name: String` | `Vec<FileNode>` | Recursive file tree for a project (dirs first, max depth 10) |
+| `list_data_files` | — | `Vec<FileNode>` | Recursive file tree for the entire `data/` directory |
 
 `FileNode` is `{ name: String, is_dir: bool, children: Vec<FileNode> }`.
 
@@ -80,6 +81,6 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 - On mount: sets the OS window title to the project name and maximizes the window.
 - **Menu bar** (top, full width): leaf logo + File / Edit / Tools / Options / Help. File → "Exit project" unmaximizes, restores to 800×600, centers, then navigates home. Other menus are currently empty.
 - **Activity bar** (44px, left): Explorer toggle button — clicking it shows/hides the file explorer panel.
-- **File explorer** (220px): VSCode-style tree showing `data/projects/<name>/` contents. Folders are expandable/collapsible. Section header collapses the whole tree.
+- **File explorer** (220px): VSCode-style tree showing the entire `data/` directory (via `list_data_files`). Folders are expandable/collapsible. Section header labelled "DATA" collapses the whole tree.
 - **Main area**: placeholder workspace content.
 - On exit: window is restored to 800×600 and centered before navigating home.

@@ -51,9 +51,11 @@
 
   async function exitProject() {
     const win = getCurrentWindow();
-    await win.unmaximize();
-    await win.setSize(new LogicalSize(800, 600));
-    await win.center();
+    try {
+      await win.unmaximize();
+      await win.setSize(new LogicalSize(800, 600));
+      await win.center();
+    } catch (_) {}
     window.location.href = '/';
   }
 
@@ -85,7 +87,7 @@
     const win = getCurrentWindow();
     await win.setTitle(projectName);
     await win.maximize();
-    fileTree = await invoke<FileNode[]>('list_project_files', { name: projectName });
+    fileTree = await invoke<FileNode[]>('list_data_files');
   });
 </script>
 
@@ -168,7 +170,7 @@
           >
             <path d="M2.5 3.5l2.5 3 2.5-3"/>
           </svg>
-          <span>{projectName.toUpperCase()}</span>
+          <span>DATA</span>
         </button>
 
         {#if explorerExpanded}
