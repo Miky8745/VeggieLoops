@@ -8,6 +8,7 @@
   import NewProjectModal from '$lib/components/NewProjectModal.svelte';
   import MenuBar from '$lib/components/MenuBar.svelte';
   import FileExplorer from '$lib/components/FileExplorer.svelte';
+  import Playlist from '$lib/components/Playlist.svelte';
   import type { FileNode } from '$lib/types';
 
   type View = 'home' | 'project';
@@ -84,14 +85,7 @@
         <div class="main-header">
           <h1 class="main-title">{projectName}</h1>
         </div>
-        <div class="placeholder">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.2" aria-hidden="true">
-            <rect x="4" y="4" width="48" height="48" rx="12"/>
-            <path d="M20 28h16M28 20v16"/>
-          </svg>
-          <p class="placeholder-label">Workspace ready</p>
-          <p class="placeholder-sub">Start building your veggie loop.</p>
-        </div>
+        <Playlist />
       </main>
     </div>
   </div>
@@ -153,27 +147,6 @@
     font-weight: 600;
     color: var(--main-text);
   }
-
-  .placeholder {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: var(--main-muted);
-    text-align: center;
-  }
-
-  .placeholder-label {
-    font-family: 'Playfair Display', Georgia, serif;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--main-text);
-    opacity: 0.4;
-  }
-
-  .placeholder-sub { font-size: 13px; color: var(--main-muted); }
 
   /* ── Shared ────────────────────────────────── */
   .main {

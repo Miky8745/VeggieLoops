@@ -58,6 +58,7 @@ src/
       NewProjectModal.svelte — new-project form modal (owns its own state + invoke)
       MenuBar.svelte         — project page menu bar with dropdowns
       FileExplorer.svelte    — activity bar + explorer panel + file tree
+      Playlist.svelte        — FL Studio-style playlist grid (tracks × bars, 4/4 shading, sticky headers)
 ```
 
 CSS custom properties (design tokens) live in `app.html`'s `<style>` tag so they are available synchronously before any JS runs. New components should use `var(--token)` rather than hardcoding colors.
@@ -101,4 +102,4 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 - **Menu bar** (top, full width): leaf logo + File / Edit / Tools / Options / Help. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
 - **Activity bar** (44px, left): Explorer toggle button.
 - **File explorer** (220px): VSCode-style tree for the entire `data/` directory (via `list_data_files`). Folders are expandable/collapsible; section header "DATA" collapses the tree.
-- **Main area**: placeholder workspace content.
+- **Main area**: `Playlist` component — scrollable grid with 8 tracks × 64 bars. Track names are sticky-left; bar ruler is sticky-top. Groups of 4 bars alternate shade (`#1C1C1C` / `#222222`). `trackHeight`, `barWidth`, `barCount` are `$state` for future resize support.
