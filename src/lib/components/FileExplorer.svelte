@@ -7,6 +7,9 @@
   let explorerExpanded = $state(true);
   let showExplorer = $state(true);
 
+  let dragging = $state<{ name: string; x: number; y: number } | null>(null);
+  let pendingDrag = $state<{ name: string; startX: number; startY: number } | null>(null);
+
   let flatNodes = $derived(buildFlat(fileTree, 0, ''));
 
   function buildFlat(nodes: FileNode[], depth: number, parentId: string): FlatNode[] {
@@ -27,6 +30,42 @@
     if (next.has(id)) next.delete(id); else next.add(id);
     expandedIds = next;
   }
+
+  function onFilePointerDown(e: PointerEvent, name: string) {
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    pendingDrag = { name, startX: e.clientX, startY: e.clientY };
+  }
+
+  $effect(() => {
+    function onMove(e: PointerEvent) {
+      if (pendingDrag) {
+        const dx = e.clientX - pendingDrag.startX;
+        const dy = e.clientY - pendingDrag.startY;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+          dragging = { name: pendingDrag.name, x: e.clientX, y: e.clientY };
+          pendingDrag = null;
+        }
+      } else if (dragging) {
+        dragging = { name: dragging.name, x: e.clientX, y: e.clientY };
+      }
+    }
+    function onUp() { dragging = null; pendingDrag = null; }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    return () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+  });
+
+  $effect(() => {
+    if (dragging) {
+      document.body.style.cursor = 'grabbing';
+    } else {
+      document.body.style.cursor = '';
+    }
+  });
 </script>
 
 <!-- Activity bar -->
@@ -109,6 +148,7 @@
                 style="padding-left: {10 + flat.depth * 16 + 13}px"
                 role="treeitem"
                 aria-selected={false}
+                onpointerdown={(e) => onFilePointerDown(e, flat.node.name)}
               >
                 <svg class="item-icon item-icon--file" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M2 1.5h6l3 3v7.5H2V1.5z"/>
@@ -123,6 +163,21 @@
     {/if}
   </div>
 </div>
+{/if}
+
+<!-- Drag ghost -->
+{#if dragging}
+  <div
+    class="drag-ghost"
+    style="left:{dragging.x + 12}px; top:{dragging.y - 10}px"
+    aria-hidden="true"
+  >
+    <svg class="ghost-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 1.5h6l3 3v7.5H2V1.5z"/>
+      <path d="M8 1.5V4.5H11"/>
+    </svg>
+    <span>{dragging.name}</span>
+  </div>
 {/if}
 
 <style>
@@ -159,7 +214,7 @@
     opacity: 0.6;
   }
 
-  .activity-btn--active { opacity: 1; color: #D0EAD0; }
+  .activity-btn--active { opacity: 1; color: #E0E0E0; }
   .activity-btn:hover { background: rgba(255,255,255,0.06); opacity: 1; }
 
   .explorer {
@@ -204,7 +259,7 @@
     transition: color 0.1s;
   }
 
-  .section-title:hover { color: #D0EAD0; }
+  .section-title:hover { color: #E0E0E0; }
 
   .section-chevron { flex-shrink: 0; transition: transform 0.15s; transform: rotate(-90deg); }
   .section-chevron--open { transform: rotate(0deg); }
@@ -234,8 +289,9 @@
     overflow: hidden;
   }
 
-  .tree-item:hover { background: rgba(255,255,255,0.05); color: #D0EAD0; }
-  .tree-item--file { cursor: default; }
+  .tree-item:hover { background: rgba(255,255,255,0.05); color: #E0E0E0; }
+  .tree-item--file { cursor: grab; }
+  .tree-item--file:active { cursor: grabbing; }
 
   .item-chevron { flex-shrink: 0; transition: transform 0.15s; transform: rotate(-90deg); color: var(--main-muted); }
   .item-chevron--open { transform: rotate(0deg); }
@@ -245,4 +301,27 @@
   .item-icon--file { color: var(--sidebar-text); opacity: 0.7; }
 
   .item-name { overflow: hidden; text-overflow: ellipsis; }
+
+  .drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 7px;
+    background: #252525;
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    font-family: inherit;
+    font-size: 12.5px;
+    color: #D0D0D0;
+    white-space: nowrap;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ghost-icon { flex-shrink: 0; color: var(--accent); opacity: 0.9; }
 </style>
