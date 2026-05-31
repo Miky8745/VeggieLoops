@@ -40,6 +40,12 @@
   }
 
   $effect(() => {
+    let hoveredDrop: Element | null = null;
+
+    function findDrop(x: number, y: number): Element | null {
+      return document.elementsFromPoint(x, y).find(el => el.hasAttribute('data-sample-drop')) ?? null;
+    }
+
     function onMove(e: PointerEvent) {
       if (pendingDrag) {
         const dx = e.clientX - pendingDrag.startX;
@@ -50,9 +56,27 @@
         }
       } else if (dragging) {
         dragging = { name: dragging.name, x: e.clientX, y: e.clientY };
+        const target = findDrop(e.clientX, e.clientY);
+        if (target !== hoveredDrop) {
+          if (hoveredDrop) hoveredDrop.dispatchEvent(new CustomEvent('filedragleave'));
+          if (target) target.dispatchEvent(new CustomEvent('filedragenter'));
+          hoveredDrop = target;
+        }
       }
     }
-    function onUp() { dragging = null; pendingDrag = null; }
+
+    function onUp(e: PointerEvent) {
+      if (dragging && hoveredDrop) {
+        hoveredDrop.dispatchEvent(new CustomEvent('filedrop', { detail: dragging.name }));
+      }
+      if (hoveredDrop) {
+        hoveredDrop.dispatchEvent(new CustomEvent('filedragleave'));
+        hoveredDrop = null;
+      }
+      dragging = null;
+      pendingDrag = null;
+    }
+
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
     return () => {

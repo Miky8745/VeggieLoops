@@ -15,3 +15,13 @@ export interface MenuItem {
   label: string;
   action: () => void;
 }
+
+export interface ChannelData {
+  id: number;
+  samplePath: string | null;
+  muted: boolean;
+  pan: number;
+  volume: number;
+  mixerTrack: number;
+  steps: boolean[];
+}
