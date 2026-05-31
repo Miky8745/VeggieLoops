@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { FileNode, FlatNode } from '$lib/types';
 
-  let { fileTree }: { fileTree: FileNode[] } = $props();
+  let {
+    fileTree,
+    show = $bindable(true),
+  }: { fileTree: FileNode[]; show?: boolean } = $props();
 
   let expandedIds = $state(new Set<string>());
   let explorerExpanded = $state(true);
-  let showExplorer = $state(true);
 
   let dragging = $state<{ name: string; x: number; y: number } | null>(null);
   let pendingDrag = $state<{ name: string; startX: number; startY: number } | null>(null);
@@ -68,25 +70,9 @@
   });
 </script>
 
-<!-- Activity bar -->
-<aside class="activity-bar">
-  <div class="activity-top">
-    <button
-      class="activity-btn"
-      class:activity-btn--active={showExplorer}
-      title="Explorer"
-      aria-label="Toggle explorer"
-      onclick={() => showExplorer = !showExplorer}
-    >
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 5h7l2 2h7v11H3V5z"/>
-      </svg>
-    </button>
-  </div>
-</aside>
+<div class="fe-mount" class:fe-hidden={!show}>
 
 <!-- Explorer panel -->
-{#if showExplorer}
 <div class="explorer">
   <div class="explorer-head">Explorer</div>
 
@@ -164,7 +150,6 @@
     {/if}
   </div>
 </div>
-{/if}
 
 <!-- Drag ghost -->
 {#if dragging}
@@ -181,42 +166,11 @@
   </div>
 {/if}
 
+</div><!-- /fe-mount -->
+
 <style>
-  .activity-bar {
-    width: 44px;
-    flex-shrink: 0;
-    background: var(--sidebar-bg);
-    border-right: 1px solid var(--sidebar-border);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .activity-top {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-top: 8px;
-    gap: 4px;
-  }
-
-  .activity-btn {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: transparent;
-    color: var(--sidebar-text);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s;
-    opacity: 0.6;
-  }
-
-  .activity-btn--active { opacity: 1; color: #E0E0E0; }
-  .activity-btn:hover { background: rgba(255,255,255,0.06); opacity: 1; }
+  .fe-mount   { display: contents; }
+  .fe-hidden  { display: none; }
 
   .explorer {
     width: 220px;

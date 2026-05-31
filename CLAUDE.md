@@ -56,8 +56,9 @@ src/
       Sidebar.svelte         — home sidebar: logo, nav, settings footer
       ProjectsPanel.svelte   — projects list, search, empty state, action buttons
       NewProjectModal.svelte — new-project form modal (owns its own state + invoke)
-      MenuBar.svelte         — project page menu fragment (no wrapper element): logo SVG + File/Edit/… dropdowns. Rendered as flex children inside .control-row in +page.svelte.
-      FileExplorer.svelte    — activity bar + explorer panel + file tree
+      MenuBar.svelte         — project page menu fragment (no wrapper element): logo SVG + File/Edit/… dropdowns. Embedded inside Toolbar.svelte.
+      Toolbar.svelte         — two-row FL Studio-style toolbar (CSS grid 2col × 2row). Row 1: menu section (grey-green) + transport + BPM/POS displays + feature toggles + monitor placeholder + peak meter. Row 2: info box + panel toggle buttons + snap/pattern dropdowns + Shift/Alt/Ctrl indicators. Accepts bindable props: showExplorer, showChannelRack, showPianoRoll, showPlaylist, showMixer.
+      FileExplorer.svelte    — activity bar + explorer panel + file tree. Accepts `show` bindable prop; root wrapper uses display:contents / display:none to hide without unmounting.
       Playlist.svelte        — FL Studio-style playlist grid (tracks × bars, 4/4 shading, sticky headers)
       ChannelRack.svelte     — in-app modal for the channel rack (blank placeholder, toggled from toolbar)
 ```
@@ -103,25 +104,27 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 The workspace is divided into three fixed zones. **This hierarchy must be respected for all future additions.**
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  TOP BAR  (full width, --sidebar-bg)                │
-│  .control-strip (width: max-content)                │
-│    Row 1: [logo] [File][Edit]…[Help] | [Playlist]   │
-│           [Channel Rack] [Placeholder A/B]          │
-│    Row 2: 2-line info box (same width as row 1)     │
-├──────────┬──────────────────────────────────────────┤
-│  LEFT    │  WORKSPACE                               │
-│  File    │  (everything the user edits/plays with)  │
-│  explorer│                                          │
-│  + future│                                          │
-│  lists   │                                          │
-└──────────┴──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  TOOLBAR ROW 1 (~50px, CSS grid col1+col2)                   │
+│  col1 [grey-green]: logo File Edit Add Patterns View … Help  │
+│  col2: [PAT|SNG] [▶][■][⏸][●] [BPM] [POS] [⌨→🎹][321][↺][🎵]│
+│        [monitor rect] [peak meter]                           │
+├──────────────────────────────────────────────────────────────┤
+│  TOOLBAR ROW 2 (~26px)                                       │
+│  col1 [info]: two-line status text (same width as col1 above)│
+│  col2: [📁][≡CR][🎹PR][▦PL][🎛MX][↩AS][🎤] [Snap▾][Pat▾]   │
+│        [SHF][ALT][CTL]                                       │
+├──────────┬───────────────────────────────────────────────────┤
+│  LEFT    │  WORKSPACE                                        │
+│  File    │  (everything the user edits/plays with)           │
+│  explorer│                                                   │
+└──────────┴───────────────────────────────────────────────────┘
 ```
 
-- **Top bar** — all controlling buttons and displays go here. The `MenuBar` component (a Svelte 5 fragment) provides the logo + menu entries; toolbar buttons (Playlist, Channel Rack, …) follow in the same row separated by a 1px divider. A 2-line info box below those buttons shows status/metadata. The info box must remain visually part of the top bar — same background, no contrasting color block — because introducing a distinct background would create a false new section.
-- **Left** — file explorer and any future list-type structures (mixer channels, sample browser, etc.).
+- **Toolbar** (`Toolbar.svelte`) — a CSS grid (`grid-template-columns: max-content 1fr; grid-template-rows: 50px 26px`). Col 1 is the menu section (grey-green bg, `--toolbar-green-bg`); it auto-sizes, and the info box in row 2 col 1 stretches to the same width automatically. All transport/toggle/panel buttons live in col 2. New toolbar buttons go in `Toolbar.svelte`.
+- **Left** — file explorer and any future list-type structures.
 - **Workspace** — everything the user edits: playlist, piano roll, mixer, etc.
 
-**Never place controlling buttons or displays in the left or workspace zones.** New toolbar buttons belong in the top bar's `control-row` in `+page.svelte`; new left-panel structures belong inside/beside `FileExplorer.svelte`.
+**Never place controlling buttons or displays in the left or workspace zones.** New toolbar controls belong in `Toolbar.svelte`; new left-panel structures belong inside/beside `FileExplorer.svelte`.
 
 Entered via `openProject(name)`: sets window title, maximizes, loads file tree, sets `view = 'project'`. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
