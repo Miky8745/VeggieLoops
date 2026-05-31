@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { MenuItem } from '$lib/types';
   import MenuBar from './MenuBar.svelte';
+  import { playback } from '$lib/playbackStore.svelte';
 
   let {
     menus,
@@ -23,8 +24,7 @@
   let isPaused    = $state(false);
   let isRecording = $state(false);
 
-  // Display
-  let tempo        = $state(120.0);
+  // Display — tempo is sourced from the shared playback store
   let position     = $state({ beat: 1, step: 1, tick: 0 });
   let patternMode  = $state<'pattern' | 'song'>('pattern');
 
@@ -86,7 +86,7 @@
   function onTempoWheel(e: WheelEvent) {
     e.preventDefault();
     const step = e.shiftKey ? 10 : 1;
-    tempo = Math.max(20, Math.min(999, tempo - Math.sign(e.deltaY) * step));
+    playback.tempo = Math.max(20, Math.min(999, playback.tempo - Math.sign(e.deltaY) * step));
   }
 </script>
 
@@ -146,7 +146,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="tb-display tb-display--tempo" role="group" aria-label="Tempo" onwheel={onTempoWheel}>
       <span class="tb-dlabel">BPM</span>
-      <span class="tb-dvalue">{tempo.toFixed(1)}</span>
+      <span class="tb-dvalue">{playback.tempo.toFixed(1)}</span>
     </div>
 
     <!-- Song position -->

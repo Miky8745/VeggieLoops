@@ -9,8 +9,8 @@
   let expandedIds = $state(new Set<string>());
   let explorerExpanded = $state(true);
 
-  let dragging = $state<{ name: string; x: number; y: number } | null>(null);
-  let pendingDrag = $state<{ name: string; startX: number; startY: number } | null>(null);
+  let dragging = $state<{ name: string; path: string; x: number; y: number } | null>(null);
+  let pendingDrag = $state<{ name: string; path: string; startX: number; startY: number } | null>(null);
 
   let flatNodes = $derived(buildFlat(fileTree, 0, ''));
 
@@ -33,10 +33,10 @@
     expandedIds = next;
   }
 
-  function onFilePointerDown(e: PointerEvent, name: string) {
+  function onFilePointerDown(e: PointerEvent, name: string, path: string) {
     e.preventDefault();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    pendingDrag = { name, startX: e.clientX, startY: e.clientY };
+    pendingDrag = { name, path, startX: e.clientX, startY: e.clientY };
   }
 
   $effect(() => {
@@ -51,11 +51,11 @@
         const dx = e.clientX - pendingDrag.startX;
         const dy = e.clientY - pendingDrag.startY;
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-          dragging = { name: pendingDrag.name, x: e.clientX, y: e.clientY };
+          dragging = { name: pendingDrag.name, path: pendingDrag.path, x: e.clientX, y: e.clientY };
           pendingDrag = null;
         }
       } else if (dragging) {
-        dragging = { name: dragging.name, x: e.clientX, y: e.clientY };
+        dragging = { name: dragging.name, path: dragging.path, x: e.clientX, y: e.clientY };
         const target = findDrop(e.clientX, e.clientY);
         if (target !== hoveredDrop) {
           if (hoveredDrop) hoveredDrop.dispatchEvent(new CustomEvent('filedragleave'));
@@ -67,7 +67,7 @@
 
     function onUp(e: PointerEvent) {
       if (dragging && hoveredDrop) {
-        hoveredDrop.dispatchEvent(new CustomEvent('filedrop', { detail: dragging.name }));
+        hoveredDrop.dispatchEvent(new CustomEvent('filedrop', { detail: dragging.path }));
       }
       if (hoveredDrop) {
         hoveredDrop.dispatchEvent(new CustomEvent('filedragleave'));
@@ -159,7 +159,7 @@
                 role="treeitem"
                 aria-selected={false}
                 tabindex="0"
-                onpointerdown={(e) => onFilePointerDown(e, flat.node.name)}
+                onpointerdown={(e) => onFilePointerDown(e, flat.node.name, flat.id.slice(1))}
               >
                 <svg class="item-icon item-icon--file" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M2 1.5h6l3 3v7.5H2V1.5z"/>

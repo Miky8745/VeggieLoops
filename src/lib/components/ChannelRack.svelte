@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import type { ChannelData } from '$lib/types';
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
   import ChannelRow from './ChannelRow.svelte';
+  import { playback } from '$lib/playbackStore.svelte';
+  import { audioEngine } from '$lib/audioEngine';
 
   let { show = $bindable() }: { show: boolean } = $props();
 
@@ -54,7 +57,6 @@
 
   // ── Header toggles ─────────────────────────────────────────────────
   let loopStart   = $state(false);
-  let playing     = $state(false);
   let loopMode    = $state(false);
   let graphEditor = $state(false);
   let prOverview  = $state(false);
@@ -62,6 +64,50 @@
   // ── Swing & pattern length ─────────────────────────────────────────
   let swing         = $state(0);
   let patternLength = $state(16);
+
+  // ── Playback / audio engine ────────────────────────────────────────
+  let rafId = 0;
+
+  function startRaf() {
+    function frame() {
+      if (!playback.isPlaying) return;
+      const elapsed = audioEngine.currentTime - audioEngine.startAudioTime;
+      if (elapsed >= 0) {
+        playback.currentStep = Math.floor(elapsed / audioEngine.stepDuration) % patternLength;
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function stopRaf() {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+
+  // Using getter closures so channels/tempo are read live inside the engine
+  // without becoming reactive dependencies of this effect.
+  $effect(() => {
+    if (playback.isPlaying) {
+      audioEngine.stop();
+      audioEngine.start(
+        () => playback.tempo,
+        () => channels,
+        patternLength,
+      );
+      startRaf();
+    } else {
+      audioEngine.stop();
+      stopRaf();
+      playback.currentStep = -1;
+    }
+  });
+
+  onDestroy(() => {
+    audioEngine.stop();
+    stopRaf();
+  });
 
   // ── Dropdowns ──────────────────────────────────────────────────────
   let optionsOpen = $state(false);
@@ -217,21 +263,24 @@
           </svg>
         </div>
 
-        <!-- 5. Play/speaker toggle -->
+        <!-- 5. Play/stop toggle -->
         <button
           class="hdr-btn hdr-tgl"
-          class:hdr-tgl--on={playing}
-          onclick={(e) => { e.stopPropagation(); playing = !playing; }}
-          aria-label="Play"
-          title="Play"
+          class:hdr-tgl--on={playback.isPlaying}
+          onclick={(e) => { e.stopPropagation(); playback.isPlaying = !playback.isPlaying; }}
+          aria-label={playback.isPlaying ? 'Stop' : 'Play'}
+          title={playback.isPlaying ? 'Stop' : 'Play'}
         >
-          <svg viewBox="0 0 14 14" fill="currentColor">
-            <path d="M2 5h2.5L8 2v10L4.5 9H2z"/>
-            {#if playing}
-              <path d="M9.5 5Q12 7 9.5 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-              <path d="M11 3.5Q14 7 11 10.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            {/if}
-          </svg>
+          {#if playback.isPlaying}
+            <svg viewBox="0 0 14 14" fill="currentColor">
+              <rect x="3" y="3" width="3" height="8" rx="0.5"/>
+              <rect x="8" y="3" width="3" height="8" rx="0.5"/>
+            </svg>
+          {:else}
+            <svg viewBox="0 0 14 14" fill="currentColor">
+              <path d="M4 2.5l7 4.5-7 4.5z"/>
+            </svg>
+          {/if}
         </button>
       </div>
 
@@ -316,6 +365,7 @@
           channel={ch}
           {nameColWidth}
           selected={selectedIds.has(ch.id)}
+          activeStep={playback.currentStep}
           onSelect={(e) => handleSelect(i, e)}
           onStepChange={(step, active) => { channels[i].steps[step] = active; }}
           onSampleDrop={(name) => { channels[i].samplePath = name; }}

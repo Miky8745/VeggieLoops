@@ -7,6 +7,7 @@
     channel,
     nameColWidth,
     selected,
+    activeStep = -1,
     onSelect,
     onStepChange,
     onSampleDrop,
@@ -14,6 +15,7 @@
     channel:      ChannelData;
     nameColWidth: number;
     selected:     boolean;
+    activeStep?:  number;
     onSelect:     (e: MouseEvent) => void;
     onStepChange: (step: number, active: boolean) => void;
     onSampleDrop: (name: string) => void;
@@ -140,6 +142,7 @@
         class:step--on={active}
         class:step--grey={grp === 0}
         class:step--orange={grp === 1}
+        class:step--playing={i === activeStep}
         onmousedown={(e) => stepMousedown(e, i)}
         onpointerenter={(e) => stepPointerenter(e, i)}
         oncontextmenu={(e) => e.preventDefault()}
@@ -262,4 +265,6 @@
   .step--orange.step--on { background: var(--accent); }
 
   .step:hover:not(.step--on) { filter: brightness(1.4); }
+
+  .step--playing { outline: 2px solid rgba(255,255,255,0.55); outline-offset: -2px; }
 </style>

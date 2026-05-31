@@ -88,8 +88,21 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 | `create_project` | `name: String` | `()` | Creates `data/projects/<name>/` |
 | `list_project_files` | `name: String` | `Vec<FileNode>` | Recursive file tree for a project (dirs first, max depth 10) |
 | `list_data_files` | — | `Vec<FileNode>` | Recursive file tree for the entire `data/` directory |
+| `get_data_root` | — | `String` | Absolute path to the `data/` directory |
+| `read_audio_bytes` | `relative_path: String` | `Vec<u8>` | Reads `data/<relative_path>` and returns raw bytes (path traversal blocked) |
 
 `FileNode` is `{ name: String, is_dir: bool, children: Vec<FileNode> }`.
+
+## Audio / playback
+
+The sequencer uses the Web Audio API look-ahead scheduler pattern for accurate timing:
+
+- **`src/lib/playbackStore.svelte.ts`** — Svelte 5 class-based shared state: `isPlaying`, `tempo` (BPM), `currentStep` (0-15 when playing, -1 when stopped). Both `Toolbar` and `ChannelRack` import the singleton `playback` object.
+- **`src/lib/audioEngine.ts`** — singleton `audioEngine`. `start(getBpm, getChannels, patternLength)` takes *getters* (closures), not direct values, so that live BPM and channel changes are picked up on each scheduler tick without restarting the engine. Uses `AudioContext.currentTime` for sample-accurate scheduling (`source.start(time)`). 100ms lookahead, 25ms tick interval.
+- **Visual sync** — a `requestAnimationFrame` loop in `ChannelRack` reads `audioEngine.currentTime - audioEngine.startAudioTime` and divides by `audioEngine.stepDuration` to determine the display step. This matches what's audibly playing, not what's been pre-scheduled.
+- **Sample loading** — `audioEngine.loadSample(relativePath)` calls `invoke('read_audio_bytes', { relativePath })` and decodes with `decodeAudioData`. Results are cached in a `Map` keyed by relative path.
+- **Step convention** — 16 steps = 4 bars of 4/4; each step = 1 quarter note. Step duration = `60 / BPM` seconds. Color groups in ChannelRow (4 steps per group) correspond to one bar each.
+- **Sample paths** — `FileExplorer` dispatches the path relative to `data/` (e.g. `samples/drums/clap02.ogg`) in the `filedrop` event. This is stored in `channel.samplePath` and passed directly to `read_audio_bytes`.
 
 ## Views (both in `src/routes/+page.svelte`)
 

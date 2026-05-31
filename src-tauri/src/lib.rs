@@ -84,6 +84,24 @@ fn list_projects() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+fn get_data_root() -> Result<String, String> {
+    let path = app_root()?.join("data");
+    path.to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Non-UTF8 path".to_string())
+}
+
+#[tauri::command]
+fn read_audio_bytes(relative_path: String) -> Result<Vec<u8>, String> {
+    let clean = relative_path.trim();
+    if clean.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+    let path = app_root()?.join("data").join(clean);
+    std::fs::read(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn create_project(name: String) -> Result<(), String> {
     let clean = name.trim();
     if clean.is_empty() {
@@ -108,7 +126,9 @@ pub fn run() {
             list_projects,
             list_project_files,
             list_data_files,
-            create_project
+            create_project,
+            get_data_root,
+            read_audio_bytes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
