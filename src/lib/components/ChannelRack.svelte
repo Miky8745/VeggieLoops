@@ -368,7 +368,7 @@
           activeStep={playback.currentStep}
           onSelect={(e) => handleSelect(i, e)}
           onStepChange={(step, active) => { channels[i].steps[step] = active; }}
-          onSampleDrop={(name) => { channels[i].samplePath = name; }}
+          onSampleDrop={(name) => { channels[i].samplePath = name; audioEngine.loadSample(name); }}
         />
       {/each}
     </div>
