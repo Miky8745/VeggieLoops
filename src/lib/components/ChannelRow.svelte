@@ -2,6 +2,7 @@
   import type { ChannelData } from '$lib/types';
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
+  import { formatSampleName } from '$lib/sampleName';
 
   let {
     channel,
@@ -11,6 +12,7 @@
     onSelect,
     onStepChange,
     onSampleDrop,
+    onOpenPianoRoll,
   }: {
     channel:      ChannelData;
     nameColWidth: number;
@@ -19,6 +21,7 @@
     onSelect:     (e: MouseEvent) => void;
     onStepChange: (step: number, active: boolean) => void;
     onSampleDrop: (name: string) => void;
+    onOpenPianoRoll: () => void;
   } = $props();
 
   // Paint mode shared across all rows via module-level state
@@ -45,15 +48,6 @@
       el.removeEventListener('filedrop', onDrop);
     };
   });
-
-  function formatSampleName(path: string | null): string {
-    if (!path) return 'Drop sample';
-    const base = path.split('/').pop() ?? path;
-    const noExt = base.replace(/\.[^.]+$/, '');
-    return noExt
-      .replace(/[-_]/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-  }
 
   let sampleLabel = $derived(formatSampleName(channel.samplePath));
   let isEmpty = $derived(channel.samplePath === null);
@@ -118,6 +112,7 @@
     style="width:{nameColWidth}px; min-width:{nameColWidth}px; max-width:{nameColWidth}px;"
     data-sample-drop
     bind:this={dropEl}
+    ondblclick={onOpenPianoRoll}
     role="region"
     aria-label="Sample drop zone"
   >

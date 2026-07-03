@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { ChannelData } from '$lib/types';
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
   import ChannelRow from './ChannelRow.svelte';
   import { playback } from '$lib/playbackStore.svelte';
   import { audioEngine } from '$lib/audioEngine';
+  import { channelStore } from '$lib/channelStore.svelte';
 
-  let { show = $bindable() }: { show: boolean } = $props();
+  let { show = $bindable(), onOpenPianoRoll }: { show: boolean; onOpenPianoRoll: (channelId: number) => void } = $props();
 
   // ── Window drag ────────────────────────────────────────────────────
   let x = $state(120);
@@ -61,9 +61,8 @@
   let graphEditor = $state(false);
   let prOverview  = $state(false);
 
-  // ── Swing & pattern length ─────────────────────────────────────────
-  let swing         = $state(0);
-  let patternLength = $state(16);
+  // ── Swing ─────────────────────────────────────────────────────────
+  let swing = $state(0);
 
   // ── Playback / audio engine ────────────────────────────────────────
   let rafId = 0;
@@ -73,7 +72,7 @@
       if (!playback.isPlaying) return;
       const elapsed = audioEngine.currentTime - audioEngine.startAudioTime;
       if (elapsed >= 0) {
-        playback.currentStep = Math.floor(elapsed / audioEngine.stepDuration) % patternLength;
+        playback.currentStep = Math.floor(elapsed / audioEngine.stepDuration) % channelStore.patternLength;
       }
       rafId = requestAnimationFrame(frame);
     }
@@ -93,8 +92,8 @@
       audioEngine.stop();
       audioEngine.start(
         () => playback.tempo,
-        () => channels,
-        patternLength,
+        () => channelStore.channels,
+        channelStore.patternLength,
       );
       startRaf();
     } else {
@@ -131,33 +130,12 @@
     filterOpen = false;
   }
 
-  // ── Channels ───────────────────────────────────────────────────────
-  let nextId = 1;
-
-  function makeChannel(id: number): ChannelData {
-    return {
-      id,
-      samplePath: null,
-      muted: false,
-      pan: 0.5,
-      volume: 0.8,
-      mixerTrack: 0,
-      steps: Array(16).fill(false) as boolean[],
-    };
-  }
-
-  let channels = $state<ChannelData[]>([makeChannel(0)]);
-
-  function addChannel() {
-    channels.push(makeChannel(nextId++));
-  }
-
   // ── Selection ──────────────────────────────────────────────────────
   let selectedIds     = $state(new Set<number>());
   let lastSelectedIdx = -1;
 
   function handleSelect(i: number, e: MouseEvent) {
-    const id = channels[i].id;
+    const id = channelStore.channels[i].id;
     if (e.ctrlKey || e.metaKey) {
       const next = new Set(selectedIds);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -165,7 +143,7 @@
     } else if (e.shiftKey && lastSelectedIdx >= 0) {
       const lo = Math.min(lastSelectedIdx, i);
       const hi = Math.max(lastSelectedIdx, i);
-      selectedIds = new Set(channels.slice(lo, hi + 1).map(c => c.id));
+      selectedIds = new Set(channelStore.channels.slice(lo, hi + 1).map(c => c.id));
     } else {
       selectedIds = new Set([id]);
     }
@@ -295,9 +273,24 @@
           <span class="dial-label">SWING</span>
         </div>
 
-        <!-- 8. Pattern length -->
+        <!-- 8. Time signature (beats per bar; denominator fixed at quarter notes) -->
         <div class="sf-group">
-          <ScrollField bind:value={patternLength} min={1} max={999} width={34} />
+          <span class="ts-wrap">
+            <ScrollField bind:value={channelStore.beatsPerBar} min={1} max={16} width={16} />
+            <span class="ts-slash">/4</span>
+          </span>
+          <span class="dial-label">TIME SIG</span>
+        </div>
+
+        <!-- 8b. Pattern length (always a whole multiple of one bar) -->
+        <div class="sf-group">
+          <ScrollField
+            bind:value={channelStore.patternLength}
+            min={channelStore.barLength}
+            max={channelStore.barLength * 64}
+            step={channelStore.barLength}
+            width={34}
+          />
           <span class="dial-label">LEN</span>
         </div>
 
@@ -360,22 +353,23 @@
 
     <!-- ══ CHANNEL LIST ═══════════════════════════════════════════════ -->
     <div class="rack-list" id="rack-list">
-      {#each channels as ch, i (ch.id)}
+      {#each channelStore.channels as ch, i (ch.id)}
         <ChannelRow
           channel={ch}
           {nameColWidth}
           selected={selectedIds.has(ch.id)}
           activeStep={playback.currentStep}
           onSelect={(e) => handleSelect(i, e)}
-          onStepChange={(step, active) => { channels[i].steps[step] = active; }}
-          onSampleDrop={(name) => { channels[i].samplePath = name; audioEngine.loadSample(name); }}
+          onStepChange={(step, active) => { channelStore.channels[i].steps[step] = active; }}
+          onSampleDrop={(name) => { channelStore.channels[i].samplePath = name; audioEngine.loadSample(name); }}
+          onOpenPianoRoll={() => onOpenPianoRoll(ch.id)}
         />
       {/each}
     </div>
 
     <!-- ══ BOTTOM BAR ═════════════════════════════════════════════════ -->
     <div class="rack-footer">
-      <button class="add-btn" onclick={addChannel} aria-label="Add channel" title="Add channel">+</button>
+      <button class="add-btn" onclick={() => channelStore.addChannel()} aria-label="Add channel" title="Add channel">+</button>
       <div class="h-scroll-track" role="scrollbar" aria-controls="rack-list" aria-orientation="horizontal" aria-valuenow={0} aria-valuemin={0} aria-valuemax={100}>
         <div class="h-scroll-thumb"></div>
       </div>
@@ -529,6 +523,18 @@
     font-family: 'DM Mono', monospace;
     line-height: 1;
     pointer-events: none;
+  }
+
+  .ts-wrap {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .ts-slash {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
   }
 
   /* Close button */

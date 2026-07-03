@@ -61,18 +61,21 @@ class AudioEngine {
     return p;
   }
 
-  private playSample(buf: AudioBuffer, volume: number, pan: number, time: number) {
+  private playSample(buf: AudioBuffer, volume: number, pan: number, time: number, playbackRate = 1) {
     if (!this.ctx || !this.masterOut) return;
     const src  = this.ctx.createBufferSource();
     src.buffer = buf;
+    src.playbackRate.value = playbackRate;
     const gain = this.ctx.createGain();
     const vol  = Math.max(0, Math.min(1, volume));
     // Start at full volume immediately — the 0.5ms micro-ramp only guards
     // against DC-offset pops and is inaudible on transient material.
     gain.gain.setValueAtTime(0, time);
     gain.gain.linearRampToValueAtTime(vol, time + RAMP);
-    // Fade out the last 0.5ms to prevent an end-of-buffer click.
-    const end = time + buf.duration;
+    // Fade out the last 0.5ms to prevent an end-of-buffer click. Playback
+    // rate stretches/compresses the buffer's audible duration, so the end
+    // time must scale with it too.
+    const end = time + buf.duration / playbackRate;
     gain.gain.setValueAtTime(vol, Math.max(time + RAMP, end - RAMP));
     gain.gain.linearRampToValueAtTime(0, end);
     const panner = this.ctx.createStereoPanner();
@@ -84,7 +87,7 @@ class AudioEngine {
   private tick() {
     if (!this.ctx) return;
     const bpm      = this.getBpm();
-    this.stepDuration = 60 / bpm / 4; // 16th note
+    this.stepDuration = 60 / bpm / 4; // sixteenth note — 4 steps per beat
     const lookAhead = this.ctx.currentTime + LOOKAHEAD;
 
     while (this.nextStepTime < lookAhead) {
@@ -92,10 +95,26 @@ class AudioEngine {
       const playTime = this.nextStepTime;
 
       for (const ch of this.getChannels()) {
-        if (!ch.muted && ch.samplePath && ch.steps[step]) {
-          const path = ch.samplePath;
-          const vol  = ch.volume;
-          const pan  = ch.pan;
+        if (ch.muted || !ch.samplePath) continue;
+        const path = ch.samplePath;
+        const pan  = ch.pan;
+
+        // A channel with any piano-roll notes plays purely from note data
+        // (pitched, velocity-scaled); otherwise it falls back to the plain
+        // boolean step sequencer, unchanged from before notes existed.
+        if (ch.notes.length > 0) {
+          for (const note of ch.notes) {
+            if (note.start !== step) continue;
+            const rate = 2 ** ((note.pitch - 60) / 12);
+            const vol  = ch.volume * note.velocity;
+            this.loadSample(path).then(buf => {
+              if (!buf || !this.ctx) return;
+              if (this.ctx.currentTime - playTime > 0.05) return;
+              this.playSample(buf, vol, pan, Math.max(playTime, this.ctx.currentTime + RAMP), rate);
+            });
+          }
+        } else if (ch.steps[step]) {
+          const vol = ch.volume;
           this.loadSample(path).then(buf => {
             if (!buf || !this.ctx) return;
             // If the load resolved more than 50ms after the beat, skip it —

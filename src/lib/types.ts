@@ -16,6 +16,14 @@ export interface MenuItem {
   action: () => void;
 }
 
+export interface Note {
+  id: number;
+  pitch: number;    // MIDI number, FL octave convention (60 = C5)
+  start: number;    // step index within the pattern (0..patternLength-1)
+  length: number;   // in 16th-note steps, >= 1
+  velocity: number; // 0..1
+}
+
 export interface ChannelData {
   id: number;
   samplePath: string | null;
@@ -24,4 +32,5 @@ export interface ChannelData {
   volume: number;
   mixerTrack: number;
   steps: boolean[];
+  notes: Note[];
 }

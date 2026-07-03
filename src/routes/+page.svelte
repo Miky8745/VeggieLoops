@@ -10,6 +10,8 @@
   import FileExplorer from '$lib/components/FileExplorer.svelte';
   import Playlist from '$lib/components/Playlist.svelte';
   import ChannelRack from '$lib/components/ChannelRack.svelte';
+  import PianoRoll from '$lib/components/PianoRoll.svelte';
+  import { channelStore } from '$lib/channelStore.svelte';
   import type { FileNode } from '$lib/types';
 
   type View = 'home' | 'project';
@@ -106,7 +108,14 @@
       </main>
     </div>
 
-    <ChannelRack bind:show={showChannelRack} />
+    <ChannelRack
+      bind:show={showChannelRack}
+      onOpenPianoRoll={(channelId) => {
+        channelStore.selectedChannelId = channelId;
+        showPianoRoll = true;
+      }}
+    />
+    <PianoRoll bind:show={showPianoRoll} />
   </div>
 {/if}
 

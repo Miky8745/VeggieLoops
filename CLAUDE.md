@@ -51,7 +51,11 @@ src/
     +layout.svelte           — pass-through layout (no styles; fonts + reset are in app.html)
     +page.svelte             — single page managing both home and project views (~180 lines)
   lib/
-    types.ts                 — shared TS interfaces: FileNode, FlatNode, MenuItem
+    types.ts                 — shared TS interfaces: FileNode, FlatNode, MenuItem, ChannelData, Note
+    channelStore.svelte.ts   — Svelte 5 class-based shared state: channels, patternLength, selectedChannelId (singleton, same pattern as playbackStore.svelte.ts)
+    sampleName.ts             — formatSampleName(path): shared "Drop sample" / prettified-filename label used by ChannelRow and PianoRoll
+    pianoroll/
+      pitch.ts                — pure pitch/geometry helpers shared by the piano roll components: pitch↔y, step↔x, key/black-key/C-note tests, pixel constants (STEP_W, KEY_H, KEY_COL_W, RULER_H, LANE_H)
     components/
       Sidebar.svelte         — home sidebar: logo, nav, settings footer
       ProjectsPanel.svelte   — projects list, search, empty state, action buttons
@@ -60,7 +64,14 @@ src/
       Toolbar.svelte         — two-row FL Studio-style toolbar (CSS grid 2col × 2row). Row 1: menu section (grey-green) + transport + BPM/POS displays + feature toggles + monitor placeholder + peak meter. Row 2: info box + panel toggle buttons + snap/pattern dropdowns + Shift/Alt/Ctrl indicators. Accepts bindable props: showExplorer, showChannelRack, showPianoRoll, showPlaylist, showMixer.
       FileExplorer.svelte    — activity bar + explorer panel + file tree. Accepts `show` bindable prop; root wrapper uses display:contents / display:none to hide without unmounting.
       Playlist.svelte        — FL Studio-style playlist grid (tracks × bars, 4/4 shading, sticky headers)
-      ChannelRack.svelte     — in-app modal for the channel rack (blank placeholder, toggled from toolbar)
+      ChannelRack.svelte     — draggable floating window for the channel rack (step sequencer), toggled from toolbar. Sources `channels`/`patternLength` from `channelStore` (not local state) so the Piano Roll can share the same data.
+      PianoRoll.svelte       — draggable floating window (same chrome pattern as ChannelRack), toggled from toolbar via `showPianoRoll` and also opened by double-clicking a channel's sample name in the rack. Coordinates the sub-components below and owns tool/selection/scroll-sync state.
+      pianoroll/
+        PianoRollHeader.svelte — draggable title bar + Draw/Select tool toggle + close button
+        PianoKeys.svelte       — sticky-look vertical piano key column (128 keys, black/white, C-note labels), Y-scroll driven by a `scrollTop` prop via CSS transform (not native scroll)
+        PianoRollRuler.svelte  — sticky-look step ruler (4-step grey/orange grouping, playhead cell), X-scroll driven by a `scrollLeft` prop via CSS transform
+        NoteGrid.svelte        — the actual native-scrolling grid (only real scrollbars live here); owns all draw/select/marquee/move/resize/copy-paste/delete pointer + keyboard interaction; emits scroll position up via `onScroll`
+        VelocityLane.svelte    — per-note velocity bars below the grid, drag-to-set (mirrors ChannelRow's paint gesture), X-scroll driven the same way as the ruler
 ```
 
 CSS custom properties (design tokens) live in `app.html`'s `<style>` tag so they are available synchronously before any JS runs. New components should use `var(--token)` rather than hardcoding colors.
@@ -98,11 +109,14 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 The sequencer uses the Web Audio API look-ahead scheduler pattern for accurate timing:
 
 - **`src/lib/playbackStore.svelte.ts`** — Svelte 5 class-based shared state: `isPlaying`, `tempo` (BPM), `currentStep` (0-15 when playing, -1 when stopped). Both `Toolbar` and `ChannelRack` import the singleton `playback` object.
+- **`src/lib/channelStore.svelte.ts`** — Svelte 5 class-based shared state: `channels` (`ChannelData[]`), `patternLength`, `selectedChannelId` (+ `selectedChannel` getter), `addChannel()`. `ChannelRack` and `PianoRoll` both read/write this singleton so they operate on the same channel data.
 - **`src/lib/audioEngine.ts`** — singleton `audioEngine`. `start(getBpm, getChannels, patternLength)` takes *getters* (closures), not direct values, so that live BPM and channel changes are picked up on each scheduler tick without restarting the engine. Uses `AudioContext.currentTime` for sample-accurate scheduling (`source.start(time)`). 100ms lookahead, 25ms tick interval.
 - **Visual sync** — a `requestAnimationFrame` loop in `ChannelRack` reads `audioEngine.currentTime - audioEngine.startAudioTime` and divides by `audioEngine.stepDuration` to determine the display step. This matches what's audibly playing, not what's been pre-scheduled.
 - **Sample loading** — `audioEngine.loadSample(relativePath)` calls `invoke('read_audio_bytes', { relativePath })` and decodes with `decodeAudioData`. Results are cached in a `Map` keyed by relative path.
-- **Step convention** — 16 steps = 4 bars of 4/4; each step = 1 quarter note. Step duration = `60 / BPM` seconds. Color groups in ChannelRow (4 steps per group) correspond to one bar each.
+- **Step convention** — 16 steps = 1 bar of 4/4; each step = 1 sixteenth note. Step duration = `60 / BPM / 4` seconds. Color groups in ChannelRow (4 steps per group) correspond to one beat each.
 - **Sample paths** — `FileExplorer` dispatches the path relative to `data/` (e.g. `samples/drums/clap02.ogg`) in the `filedrop` event. This is stored in `channel.samplePath` and passed directly to `read_audio_bytes`.
+- **Notes vs. steps (dual scheduling path)** — each `ChannelData` has both a flat `steps: boolean[]` (step sequencer) and a `notes: Note[]` (piano roll). In `audioEngine.tick()`, a channel with any `notes` plays *only* from that note data (pitched via `playbackRate`, scaled by `note.velocity`); a channel with an empty `notes` array falls back to the original boolean-step behavior unchanged. This means drawing in the Piano Roll fully supersedes that channel's step-sequencer row — the two are not merged/overlaid.
+- **Pitch → playback rate** — `2 ** ((note.pitch - 60) / 12)`, i.e. MIDI-style semitone pitch with `60` as the unshifted (rate = 1) reference, following FL Studio's own octave-numbering convention where `60 = C5` (see `pianoroll/pitch.ts`'s `pitchName`). There is no MIDI file import/export, so this convention only needs to be internally self-consistent.
 
 ## Views (both in `src/routes/+page.svelte`)
 
@@ -141,3 +155,15 @@ The workspace is divided into three fixed zones. **This hierarchy must be respec
 **Never place controlling buttons or displays in the left or workspace zones.** New toolbar controls belong in `Toolbar.svelte`; new left-panel structures belong inside/beside `FileExplorer.svelte`.
 
 Entered via `openProject(name)`: sets window title, maximizes, loads file tree, sets `view = 'project'`. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
+
+## Piano Roll
+
+`PianoRoll.svelte` is a draggable floating window (`position: fixed`, same header-drag chrome as `ChannelRack.svelte`) that sits outside the toolbar/left/workspace grid, like `ChannelRack` — it is not subject to the "never place controls in left/workspace" rule since it's an overlay window, not part of either fixed zone.
+
+- **Opening it** — double-click a channel's sample-name box in `ChannelRack`/`ChannelRow` (works even on an empty "Drop sample" channel — notes are channel-scoped, not sample-scoped). This sets `channelStore.selectedChannelId` and flips `showPianoRoll` (owned by `+page.svelte`, same as `showChannelRack`). The window always shows/edits `channelStore.selectedChannel`; switching the selected channel while it's open re-targets it live.
+- **Coordinate system** — `pianoroll/pitch.ts` is the single source of truth for pixel math: `stepToX`/`xToStep` (16th-note steps, `STEP_W` px each) and `pitchToY`/`yToPitch` (semitones, `KEY_H` px each, high pitches at the top). All drag/resize/marquee logic in `NoteGrid.svelte` snaps through these — there is no sub-step or microtonal dragging in v1.
+- **Scroll sync without extra scrollbars** — `NoteGrid.svelte`'s viewport is the *only* element with native `overflow: auto`; it reports `scrollLeft`/`scrollTop` up via `onScroll`. `PianoKeys` (Y) and `PianoRollRuler`/`VelocityLane` (X) are `overflow: hidden` and just apply `transform: translate(-scroll…px)` to their content — no bound scroll containers or `$effect`-driven `scrollTop` assignments needed.
+- **Tools** (`PianoRollHeader.svelte`, `tool: 'draw' | 'select'`, bindable):
+  - **Draw**: click-drag on empty space creates a note and live-resizes its length while dragging within the same pitch row; dragging into a different row switches to painting new 1-step notes into each newly-entered cell (2D extension of `ChannelRow`'s `stepMousedown`/`stepPointerenter` paint idiom). Dragging an existing note's body moves it; dragging its last ~6px moves only its right edge (resize). Right-click deletes (works in both tools).
+  - **Select**: click-drag on empty space draws a marquee (ctrl/cmd = toggle, shift = add, plain = replace — same modifier semantics as `ChannelRack.handleSelect`); dragging a selected note moves the whole selection together. Delete/Backspace removes selected notes; Ctrl/Cmd+C/V copies and pastes appended right after the copied block's end.
+- **Velocity lane** — one bar per note (`VelocityLane.svelte`), height ∝ `note.velocity` (0–1). Drag vertically to set; dragging across several bars in one gesture sets each as the pointer passes over it (same mousedown-then-pointerenter-while-buttons-held pattern as the step paint gesture).
