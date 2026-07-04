@@ -164,7 +164,7 @@
   }
 
   .ch-row--selected {
-    background: rgba(224, 120, 0, 0.08);
+    background: rgba(144, 195, 150, 0.08);
   }
 
   /* Mute dot */
@@ -201,7 +201,7 @@
 
   .sample-drop.dragover {
     border-color: var(--accent);
-    background: rgba(224,120,0,0.12);
+    background: rgba(144,195,150,0.12);
   }
 
   .sample-name {

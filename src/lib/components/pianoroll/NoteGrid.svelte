@@ -211,22 +211,44 @@
     moveDrag = null;
   }
 
+  // ── Drag deleting (right mouse button) ────────────────────────────
+  // Works in both tools, mirrors the paint gesture: right-click deletes
+  // the note under the cursor, and holding the button while dragging
+  // deletes every note the cursor passes over.
+  let deleteDragging = false;
+
+  function deleteAt(x: number, y: number) {
+    const hit = noteAt(xToStep(x), yToPitch(y));
+    if (hit) deleteNote(hit);
+  }
+
+  function deleteDragStart(e: MouseEvent) {
+    deleteDragging = true;
+    const { x, y } = localPos(e);
+    deleteAt(x, y);
+  }
+
   // ── Dispatch by active tool ──────────────────────────────────────
   function gridMousedown(e: MouseEvent) {
+    if (e.button === 2) { deleteDragStart(e); return; }
     if (tool === 'draw') drawMousedown(e); else selectMousedown(e);
   }
   function gridPointermove(e: PointerEvent) {
+    if (deleteDragging) {
+      if (!(e.buttons & 2)) { deleteDragging = false; return; }
+      const { x, y } = localPos(e);
+      deleteAt(x, y);
+      return;
+    }
     if (tool === 'draw') drawPointermove(e); else selectPointermove(e);
   }
   function gridPointerup() {
+    deleteDragging = false;
     drawPointerup();
     selectPointerup();
   }
   function gridContextmenu(e: MouseEvent) {
     e.preventDefault();
-    const { x, y } = localPos(e);
-    const hit = noteAt(xToStep(x), yToPitch(y));
-    if (hit) deleteNote(hit);
   }
 
   // ── Keyboard: delete / copy / paste ──────────────────────────────
@@ -356,7 +378,7 @@
     border-right: 1px solid rgba(255,255,255,0.04);
   }
 
-  .grid-col--orange { background: rgba(224,120,0,0.03); }
+  .grid-col--orange { background: rgba(144,195,150,0.03); }
 
   .playhead {
     position: absolute;
@@ -371,7 +393,7 @@
   .note {
     position: absolute;
     box-sizing: border-box;
-    background: var(--accent, #e07800);
+    background: var(--accent, #90c396);
     border: 1px solid rgba(0,0,0,0.4);
     border-radius: 2px;
     z-index: 3;
@@ -379,15 +401,15 @@
   }
 
   .note--selected {
-    background: var(--accent-hover, #ff8c00);
+    background: var(--accent-hover, #a1cca6);
     outline: 1px solid #fff;
     outline-offset: -1px;
   }
 
   .marquee {
     position: absolute;
-    background: rgba(224,120,0,0.15);
-    border: 1px solid var(--accent, #e07800);
+    background: rgba(144,195,150,0.15);
+    border: 1px solid var(--accent, #90c396);
     z-index: 4;
     pointer-events: none;
   }

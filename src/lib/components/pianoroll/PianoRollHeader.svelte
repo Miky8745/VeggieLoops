@@ -2,13 +2,17 @@
   let {
     title,
     tool = $bindable(),
+    maximized,
     onClose,
     onDragStart,
+    onToggleMaximize,
   }: {
     title: string;
     tool: 'draw' | 'select';
+    maximized: boolean;
     onClose: () => void;
     onDragStart: (e: MouseEvent) => void;
+    onToggleMaximize: () => void;
   } = $props();
 </script>
 
@@ -41,6 +45,23 @@
   <span class="pr-title">{title}</span>
 
   <div class="hdr-right">
+    <button
+      class="hdr-btn"
+      onclick={(e) => { e.stopPropagation(); onToggleMaximize(); }}
+      aria-label={maximized ? 'Restore' : 'Maximize'}
+      title={maximized ? 'Restore' : 'Maximize'}
+    >
+      {#if maximized}
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="8" height="8" rx="1"/>
+          <path d="M2 8V3a1 1 0 0 1 1-1h5"/>
+        </svg>
+      {:else}
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="10" height="10" rx="1"/>
+        </svg>
+      {/if}
+    </button>
     <button class="close-btn" onclick={onClose} aria-label="Close">
       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
         <line x1="3" y1="3" x2="11" y2="11"/>
@@ -59,7 +80,7 @@
     padding: 0 8px;
     height: 36px;
     background: #181818;
-    border-bottom: 1px solid var(--explorer-border, #2a2a2a);
+    border-bottom: 1px solid var(--explorer-border, #3f484e);
     flex-shrink: 0;
     cursor: grab;
     user-select: none;
@@ -113,13 +134,13 @@
   }
 
   .hdr-tgl--on {
-    color: var(--accent, #e07800);
-    border-color: rgba(224,120,0,0.3);
+    color: var(--accent, #90c396);
+    border-color: rgba(144,195,150,0.3);
   }
 
   .hdr-tgl--on:hover {
-    color: var(--accent, #e07800);
-    background: rgba(224,120,0,0.1);
+    color: var(--accent, #90c396);
+    background: rgba(144,195,150,0.1);
   }
 
   .close-btn {

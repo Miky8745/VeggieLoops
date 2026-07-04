@@ -456,7 +456,7 @@
   .tb-xp--on {
     border-color: var(--accent);
     color: var(--accent);
-    background: rgba(224, 120, 0, 0.09);
+    background: rgba(144, 195, 150, 0.09);
   }
   .tb-xp--rec { color: #c43b3b; }
   .tb-xp--rec.tb-xp--on {
@@ -513,7 +513,7 @@
   .tb-tgl:hover { background: rgba(255, 255, 255, 0.05); color: var(--main-text); }
   .tb-tgl--on {
     color: var(--accent);
-    background: rgba(224, 120, 0, 0.08);
+    background: rgba(144, 195, 150, 0.08);
   }
 
   .tb-321 {
@@ -571,7 +571,7 @@
   .tb-pb:hover { background: rgba(255, 255, 255, 0.05); color: var(--main-text); }
   .tb-pb--on {
     color: var(--accent);
-    background: rgba(224, 120, 0, 0.08);
+    background: rgba(144, 195, 150, 0.08);
   }
 
   /* ── Dropdowns ────────────────────────────────────────────────── */
@@ -612,7 +612,7 @@
     line-height: 1.4;
   }
   .tb-key--on {
-    background: rgba(224, 120, 0, 0.14);
+    background: rgba(144, 195, 150, 0.14);
     border-color: var(--accent);
     color: var(--accent);
   }

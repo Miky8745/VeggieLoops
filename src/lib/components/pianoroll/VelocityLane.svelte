@@ -85,12 +85,12 @@
     background: rgba(255,255,255,0.02);
   }
 
-  .vel-col--orange { background: rgba(224,120,0,0.03); }
+  .vel-col--orange { background: rgba(144,195,150,0.03); }
 
   .vel-bar {
     position: absolute;
     bottom: 0;
-    background: var(--accent, #e07800);
+    background: var(--accent, #90c396);
     border-radius: 2px 2px 0 0;
     cursor: ns-resize;
     opacity: 0.8;

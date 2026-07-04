@@ -3,40 +3,14 @@
   import { playback } from '$lib/playbackStore.svelte';
   import { formatSampleName } from '$lib/sampleName';
   import { KEY_COL_W, RULER_H, LANE_H } from '$lib/pianoroll/pitch';
+  import FloatingWindow, { type WorkspaceBounds } from './FloatingWindow.svelte';
   import PianoRollHeader from './pianoroll/PianoRollHeader.svelte';
   import PianoKeys from './pianoroll/PianoKeys.svelte';
   import PianoRollRuler from './pianoroll/PianoRollRuler.svelte';
   import NoteGrid from './pianoroll/NoteGrid.svelte';
   import VelocityLane from './pianoroll/VelocityLane.svelte';
 
-  let { show = $bindable() }: { show: boolean } = $props();
-
-  // ── Window drag (mirrors ChannelRack.svelte) ────────────────────────
-  let x = $state(220);
-  let y = $state(140);
-  let winDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-
-  function onHeaderMousedown(e: MouseEvent) {
-    const t = e.target as HTMLElement;
-    if (t.closest('button')) return;
-    winDragging = true;
-    dragOffsetX = e.clientX - x;
-    dragOffsetY = e.clientY - y;
-    e.preventDefault();
-  }
-
-  function onWindowMousemove(e: MouseEvent) {
-    if (winDragging) {
-      x = e.clientX - dragOffsetX;
-      y = e.clientY - dragOffsetY;
-    }
-  }
-
-  function onWindowMouseup() {
-    winDragging = false;
-  }
+  let { show = $bindable(), workspaceBounds }: { show: boolean; workspaceBounds: WorkspaceBounds } = $props();
 
   let tool = $state<'draw' | 'select'>('draw');
   let selectedNoteIds = $state(new Set<number>());
@@ -76,11 +50,17 @@
   }
 </script>
 
-<svelte:window onmousemove={onWindowMousemove} onmouseup={onWindowMouseup} />
+{#if channel}
+  <FloatingWindow
+    bind:show
+    {workspaceBounds}
+    x={220} y={140} width={760} height={480}
+    minWidth={400} minHeight={260}
+  >
+    {#snippet header({ onDragStart, maximized, toggleMaximize })}
+      <PianoRollHeader bind:tool title={channelName} {maximized} onClose={close} onDragStart={onDragStart} onToggleMaximize={toggleMaximize} />
+    {/snippet}
 
-{#if show && channel}
-  <div class="pr" role="dialog" aria-label="Piano Roll" tabindex="-1" style="left:{x}px; top:{y}px;">
-    <PianoRollHeader bind:tool title={channelName} onClose={close} onDragStart={onHeaderMousedown} />
     <div class="pr-body" style="--key-col-w:{KEY_COL_W}px; --ruler-h:{RULER_H}px; --lane-h:{LANE_H}px;">
       <div class="pr-corner"></div>
       <div class="pr-ruler-slot">
@@ -104,24 +84,10 @@
         <VelocityLane {channel} {selectedNoteIds} scrollLeft={gridScrollLeft} patternLength={channelStore.patternLength} />
       </div>
     </div>
-  </div>
+  </FloatingWindow>
 {/if}
 
 <style>
-  .pr {
-    position: fixed;
-    width: 760px;
-    height: 480px;
-    background: var(--explorer-bg, #1e1e1e);
-    border: 1px solid var(--explorer-border, #2a2a2a);
-    border-radius: 6px;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-    z-index: 100;
-    overflow: hidden;
-  }
-
   .pr-body {
     flex: 1;
     min-height: 0;
@@ -133,12 +99,12 @@
   .pr-corner,
   .pr-vel-corner {
     background: #181818;
-    border-right: 1px solid var(--explorer-border, #2a2a2a);
-    border-bottom: 1px solid var(--explorer-border, #2a2a2a);
+    border-right: 1px solid var(--explorer-border, #3f484e);
+    border-bottom: 1px solid var(--explorer-border, #3f484e);
   }
 
   .pr-ruler-slot { min-width: 0; }
-  .pr-keys-slot  { min-height: 0; border-right: 1px solid var(--explorer-border, #2a2a2a); }
+  .pr-keys-slot  { min-height: 0; border-right: 1px solid var(--explorer-border, #3f484e); }
   .pr-grid-slot  { min-width: 0; min-height: 0; }
-  .pr-vel-slot   { min-width: 0; border-top: 1px solid var(--explorer-border, #2a2a2a); }
+  .pr-vel-slot   { min-width: 0; border-top: 1px solid var(--explorer-border, #3f484e); }
 </style>

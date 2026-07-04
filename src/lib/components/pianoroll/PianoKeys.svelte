@@ -8,16 +8,20 @@
 
 <div class="keys-viewport">
   <div class="keys-content" style="height:{GRID_TOTAL_H}px; transform: translateY(-{scrollTop}px);">
-    {#each pitches as p (p)}
+    {#each pitches as p, i (p)}
+      {@const belowP = pitches[i + 1]}
+      {@const noBorder = isBlackKey(p) || (belowP !== undefined && isBlackKey(belowP))}
       <div
         class="key-row"
-        class:key-row--black={isBlackKey(p)}
-        class:key-row--white={!isBlackKey(p)}
         class:key-row--c={isCNote(p)}
+        class:key-row--no-border={noBorder}
+        class:key-row--csharp={p % 12 === 1}
         style="height:{KEY_H}px;"
       >
-        {#if isCNote(p)}
-          <span class="key-label">{pitchName(p)}</span>
+        {#if isBlackKey(p)}
+          <div class="black-key"></div>
+        {:else}
+          <span class="key-label" class:key-label--c={isCNote(p)}>{pitchName(p)}</span>
         {/if}
       </div>
     {/each}
@@ -37,7 +41,9 @@
   }
 
   .key-row {
+    position: relative;
     box-sizing: border-box;
+    background: #d8d8d8;
     border-bottom: 1px solid rgba(0,0,0,0.35);
     display: flex;
     align-items: center;
@@ -45,17 +51,48 @@
     padding-right: 6px;
   }
 
-  .key-row--white { background: #d8d8d8; }
-  .key-row--black { background: #1a1a1a; }
-  .key-row--c { border-bottom: 1px solid rgba(255,255,255,0.15); }
+  /* C rows are shaded grey so octave boundaries are easy to scan at a glance. */
+  .key-row--c { background: #b8b8b8; border-bottom: 1px solid rgba(255,255,255,0.15); }
+
+  /* Real pianos have no visible seam between a white key and the black key
+     sitting on top of/beside it — only white-to-white boundaries with no
+     black key between them (E/F, B/C) show a line. */
+  .key-row--no-border { border-bottom: none; }
+
+  /* Greying out the bottom half of the exposed white sliver next to C#'s
+     black key (the part not covered by .black-key) makes the row read as
+     if it had shifted up, away from the grey C row below it. */
+  .key-row--csharp { background: linear-gradient(to bottom, #d8d8d8 50%, #b8b8b8 50%); }
+
+  /* Real black keys are shorter (don't reach as far toward the grid) and
+     slimmer (don't fill the full semitone row) than the white keys they
+     interrupt — the row itself stays full height so it still lines up
+     1:1 with the note grid. */
+  .black-key {
+    position: absolute;
+    left: 0;
+    top: 2px;
+    bottom: 2px;
+    width: 62%;
+    background: #1a1a1a;
+    border-radius: 0 2px 2px 0;
+    box-shadow: 1px 0 2px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
 
   .key-label {
     font-size: 8px;
     font-family: 'DM Mono', monospace;
-    color: #333;
+    color: rgba(0,0,0,0.45);
     line-height: 1;
     pointer-events: none;
+    z-index: 1;
   }
 
-  .key-row--black .key-label { color: rgba(255,255,255,0.5); }
+  /* C is the octave anchor — make its label read more prominently than the
+     other white-key labels. */
+  .key-label--c {
+    color: #222;
+    font-weight: 700;
+  }
 </style>

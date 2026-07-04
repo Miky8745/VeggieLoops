@@ -7,10 +7,10 @@
   <div class="sidebar-header">
     <div class="logo">
       <svg class="logo-leaf" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-        <path d="M15 3C15 3 5 9.5 5 19C5 24.523 9.2 26.5 15 26.5C20.8 26.5 25 24.523 25 19C25 9.5 15 3 15 3Z" fill="#E07800"/>
-        <line x1="15" y1="26.5" x2="15" y2="13" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
-        <line x1="15" y1="20" x2="19.5" y2="15.5" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
-        <line x1="15" y1="16.5" x2="10.5" y2="13" stroke="#B05A00" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M15 3C15 3 5 9.5 5 19C5 24.523 9.2 26.5 15 26.5C20.8 26.5 25 24.523 25 19C25 9.5 15 3 15 3Z" fill="#90C396"/>
+        <line x1="15" y1="26.5" x2="15" y2="13" stroke="#6F9674" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="15" y1="20" x2="19.5" y2="15.5" stroke="#6F9674" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="15" y1="16.5" x2="10.5" y2="13" stroke="#6F9674" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
       <div class="logo-text">
         <span class="logo-name">VeggieLoops</span>

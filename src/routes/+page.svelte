@@ -29,6 +29,31 @@
   let showPianoRoll   = $state(false);
   let showMixer       = $state(false);
 
+  // The zone to the right of the file explorer and below the toolbar — this
+  // is what "maximize" fills for the Playlist/ChannelRack/PianoRoll floating
+  // windows. Measured off the empty `.workspace-zone` placeholder div so it
+  // stays correct as the explorer is toggled or the window is resized.
+  let workspaceEl = $state<HTMLDivElement | undefined>(undefined);
+  let workspaceBounds = $state({ x: 0, y: 0, width: 0, height: 0 });
+
+  function measureWorkspace() {
+    if (!workspaceEl) return;
+    const r = workspaceEl.getBoundingClientRect();
+    workspaceBounds = { x: r.left, y: r.top, width: r.width, height: r.height };
+  }
+
+  $effect(() => {
+    if (view !== 'project' || !workspaceEl) return;
+    measureWorkspace();
+    const ro = new ResizeObserver(measureWorkspace);
+    ro.observe(workspaceEl);
+    window.addEventListener('resize', measureWorkspace);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measureWorkspace);
+    };
+  });
+
   async function openProject(name: string) {
     const win = getCurrentWindow();
     try {
@@ -101,21 +126,19 @@
     <!-- Body: left panel + workspace -->
     <div class="body">
       <FileExplorer {fileTree} bind:show={showExplorer} />
-      <main class="main">
-        {#if showPlaylist}
-          <Playlist />
-        {/if}
-      </main>
+      <div class="workspace-zone" bind:this={workspaceEl}></div>
     </div>
 
+    <Playlist bind:show={showPlaylist} {workspaceBounds} />
     <ChannelRack
       bind:show={showChannelRack}
+      {workspaceBounds}
       onOpenPianoRoll={(channelId) => {
         channelStore.selectedChannelId = channelId;
         showPianoRoll = true;
       }}
     />
-    <PianoRoll bind:show={showPianoRoll} />
+    <PianoRoll bind:show={showPianoRoll} {workspaceBounds} />
   </div>
 {/if}
 
@@ -163,6 +186,16 @@
 
   /* Body: file explorer + workspace side by side */
   .body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+  /* Empty placeholder whose rect defines where the Playlist/ChannelRack/
+     PianoRoll floating windows land when maximized — those windows render
+     as fixed-position siblings of `.body`, not inside this div. */
+  .workspace-zone {
+    flex: 1;
+    background: var(--main-bg);
+    overflow: hidden;
+    min-width: 0;
+  }
 
   /* ── Shared ────────────────────────────────── */
   .main {

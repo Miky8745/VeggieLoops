@@ -3,27 +3,16 @@
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
   import ChannelRow from './ChannelRow.svelte';
+  import FloatingWindow, { type WorkspaceBounds } from './FloatingWindow.svelte';
   import { playback } from '$lib/playbackStore.svelte';
   import { audioEngine } from '$lib/audioEngine';
   import { channelStore } from '$lib/channelStore.svelte';
 
-  let { show = $bindable(), onOpenPianoRoll }: { show: boolean; onOpenPianoRoll: (channelId: number) => void } = $props();
-
-  // ── Window drag ────────────────────────────────────────────────────
-  let x = $state(120);
-  let y = $state(80);
-  let winDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-
-  function onHeaderMousedown(e: MouseEvent) {
-    const t = e.target as HTMLElement;
-    if (t.closest('button, [role="slider"], [role="spinbutton"], .resize-handle')) return;
-    winDragging = true;
-    dragOffsetX = e.clientX - x;
-    dragOffsetY = e.clientY - y;
-    e.preventDefault();
-  }
+  let {
+    show = $bindable(),
+    workspaceBounds,
+    onOpenPianoRoll,
+  }: { show: boolean; workspaceBounds: WorkspaceBounds; onOpenPianoRoll: (channelId: number) => void } = $props();
 
   // ── Name column resize ─────────────────────────────────────────────
   let nameColWidth = $state(140);
@@ -39,19 +28,13 @@
     resizeStartW = nameColWidth;
   }
 
-  // ── Global mouse tracking ──────────────────────────────────────────
   function onWindowMousemove(e: MouseEvent) {
-    if (winDragging) {
-      x = e.clientX - dragOffsetX;
-      y = e.clientY - dragOffsetY;
-    }
     if (colResizing) {
       nameColWidth = Math.max(80, Math.min(280, resizeStartW + (e.clientX - resizeStartX)));
     }
   }
 
   function onWindowMouseup() {
-    winDragging = false;
     colResizing = false;
   }
 
@@ -155,21 +138,20 @@
 
 <svelte:window onmousemove={onWindowMousemove} onmouseup={onWindowMouseup} />
 
-{#if show}
+{#if show && (optionsOpen || filterOpen)}
   <!-- Backdrop to close dropdowns when clicking outside them -->
-  {#if optionsOpen || filterOpen}
-    <div class="dd-backdrop" onmousedown={closeDropdowns} role="presentation"></div>
-  {/if}
+  <div class="dd-backdrop" onmousedown={closeDropdowns} role="presentation"></div>
+{/if}
 
-  <div
-    class="rack"
-    role="dialog"
-    aria-label="Channel Rack"
-    tabindex="-1"
-    style="left:{x}px; top:{y}px;"
-  >
+<FloatingWindow
+  bind:show
+  {workspaceBounds}
+  x={120} y={80} width={720} height={420}
+  minWidth={480} minHeight={220}
+>
+  {#snippet header({ onDragStart, maximized, toggleMaximize })}
     <!-- ══ TITLE BAR ══════════════════════════════════════════════════ -->
-    <div class="rack-header" onmousedown={onHeaderMousedown} role="toolbar" aria-label="Channel Rack controls" tabindex="-1">
+    <div class="rack-header" onmousedown={onDragStart} role="toolbar" aria-label="Channel Rack controls" tabindex="-1">
 
       <!-- Left group -->
       <div class="hdr-left">
@@ -341,7 +323,26 @@
           </svg>
         </button>
 
-        <!-- 12. Close -->
+        <!-- 12. Maximize / restore -->
+        <button
+          class="hdr-btn"
+          onclick={(e) => { e.stopPropagation(); toggleMaximize(); }}
+          aria-label={maximized ? 'Restore' : 'Maximize'}
+          title={maximized ? 'Restore' : 'Maximize'}
+        >
+          {#if maximized}
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="8" height="8" rx="1"/>
+              <path d="M2 8V3a1 1 0 0 1 1-1h5"/>
+            </svg>
+          {:else}
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="10" height="10" rx="1"/>
+            </svg>
+          {/if}
+        </button>
+
+        <!-- 13. Close -->
         <button class="close-btn" onclick={close} aria-label="Close">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
             <line x1="3" y1="3" x2="11" y2="11"/>
@@ -350,32 +351,32 @@
         </button>
       </div>
     </div>
+  {/snippet}
 
-    <!-- ══ CHANNEL LIST ═══════════════════════════════════════════════ -->
-    <div class="rack-list" id="rack-list">
-      {#each channelStore.channels as ch, i (ch.id)}
-        <ChannelRow
-          channel={ch}
-          {nameColWidth}
-          selected={selectedIds.has(ch.id)}
-          activeStep={playback.currentStep}
-          onSelect={(e) => handleSelect(i, e)}
-          onStepChange={(step, active) => { channelStore.channels[i].steps[step] = active; }}
-          onSampleDrop={(name) => { channelStore.channels[i].samplePath = name; audioEngine.loadSample(name); }}
-          onOpenPianoRoll={() => onOpenPianoRoll(ch.id)}
-        />
-      {/each}
-    </div>
+  <!-- ══ CHANNEL LIST ═══════════════════════════════════════════════ -->
+  <div class="rack-list" id="rack-list">
+    {#each channelStore.channels as ch, i (ch.id)}
+      <ChannelRow
+        channel={ch}
+        {nameColWidth}
+        selected={selectedIds.has(ch.id)}
+        activeStep={playback.currentStep}
+        onSelect={(e) => handleSelect(i, e)}
+        onStepChange={(step, active) => { channelStore.channels[i].steps[step] = active; }}
+        onSampleDrop={(name) => { channelStore.channels[i].samplePath = name; audioEngine.loadSample(name); }}
+        onOpenPianoRoll={() => onOpenPianoRoll(ch.id)}
+      />
+    {/each}
+  </div>
 
-    <!-- ══ BOTTOM BAR ═════════════════════════════════════════════════ -->
-    <div class="rack-footer">
-      <button class="add-btn" onclick={() => channelStore.addChannel()} aria-label="Add channel" title="Add channel">+</button>
-      <div class="h-scroll-track" role="scrollbar" aria-controls="rack-list" aria-orientation="horizontal" aria-valuenow={0} aria-valuemin={0} aria-valuemax={100}>
-        <div class="h-scroll-thumb"></div>
-      </div>
+  <!-- ══ BOTTOM BAR ═════════════════════════════════════════════════ -->
+  <div class="rack-footer">
+    <button class="add-btn" onclick={() => channelStore.addChannel()} aria-label="Add channel" title="Add channel">+</button>
+    <div class="h-scroll-track" role="scrollbar" aria-controls="rack-list" aria-orientation="horizontal" aria-valuenow={0} aria-valuemin={0} aria-valuemax={100}>
+      <div class="h-scroll-thumb"></div>
     </div>
   </div>
-{/if}
+</FloatingWindow>
 
 <style>
   /* ── Backdrop ──────────────────────────────────────────────────── */
@@ -383,22 +384,6 @@
     position: fixed;
     inset: 0;
     z-index: 150;
-  }
-
-  /* ── Rack window ───────────────────────────────────────────────── */
-  .rack {
-    position: fixed;
-    width: 720px;
-    min-height: 200px;
-    max-height: 80vh;
-    background: var(--explorer-bg, #1e1e1e);
-    border: 1px solid var(--explorer-border, #2a2a2a);
-    border-radius: 6px;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-    z-index: 100;
-    overflow: hidden;
   }
 
   /* ── Header ────────────────────────────────────────────────────── */
@@ -410,7 +395,7 @@
     padding: 0 8px;
     height: 40px;
     background: #181818;
-    border-bottom: 1px solid var(--explorer-border, #2a2a2a);
+    border-bottom: 1px solid var(--explorer-border, #3f484e);
     flex-shrink: 0;
     cursor: grab;
     user-select: none;
@@ -462,13 +447,13 @@
   }
 
   .hdr-tgl--on {
-    color: var(--accent, #e07800);
-    border-color: rgba(224,120,0,0.3);
+    color: var(--accent, #90c396);
+    border-color: rgba(144,195,150,0.3);
   }
 
   .hdr-tgl--on:hover {
-    color: var(--accent, #e07800);
-    background: rgba(224,120,0,0.1);
+    color: var(--accent, #90c396);
+    background: rgba(144,195,150,0.1);
   }
 
   /* Filter button (wider due to label) */
@@ -600,7 +585,7 @@
   }
 
   .dd-item--active {
-    color: var(--accent, #e07800);
+    color: var(--accent, #90c396);
   }
 
   /* ── Channel list ──────────────────────────────────────────────── */
@@ -625,7 +610,7 @@
     gap: 6px;
     padding: 4px 8px;
     background: #181818;
-    border-top: 1px solid var(--explorer-border, #2a2a2a);
+    border-top: 1px solid var(--explorer-border, #3f484e);
     flex-shrink: 0;
     height: 28px;
   }

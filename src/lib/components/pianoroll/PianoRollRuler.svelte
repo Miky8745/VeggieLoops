@@ -37,7 +37,7 @@
     height: 100%;
     overflow: hidden;
     background: #181818;
-    border-bottom: 1px solid var(--explorer-border, #2a2a2a);
+    border-bottom: 1px solid var(--explorer-border, #3f484e);
   }
 
   .ruler-content {
