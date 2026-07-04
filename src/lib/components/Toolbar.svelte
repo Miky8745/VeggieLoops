@@ -2,6 +2,7 @@
   import type { MenuItem } from '$lib/types';
   import MenuBar from './MenuBar.svelte';
   import { playback } from '$lib/playbackStore.svelte';
+  import { patternStore } from '$lib/patternStore.svelte';
 
   let {
     menus,
@@ -39,8 +40,7 @@
   let oneClickRecord = $state(false);
 
   // Dropdowns
-  let snapping        = $state('1/4');
-  let selectedPattern = $state(1);
+  let snapping = $state('1/4');
 
   // Modifier key indicators
   let shiftDown = $state(false);
@@ -299,17 +299,27 @@
     <div class="tb-vsep-sm"></div>
 
     <!-- Snapping -->
-    <select class="tb-sel" bind:value={snapping} title="Snapping">
-      <option value="1/4">1/4</option>
-      <option value="1/2">1/2</option>
-    </select>
+    <div class="tb-dd">
+      <select class="tb-sel" bind:value={snapping} title="Snapping">
+        <option value="1/4">1/4</option>
+        <option value="1/2">1/2</option>
+      </select>
+      <svg class="tb-dd-arrow" width="8" height="5" viewBox="0 0 8 5" fill="none" aria-hidden="true">
+        <path d="M1 1 L4 4 L7 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
 
     <!-- Pattern selection -->
-    <select class="tb-sel" bind:value={selectedPattern} title="Pattern">
-      {#each Array.from({ length: 8 }, (_, i) => i + 1) as n}
-        <option value={n}>Pat {n}</option>
-      {/each}
-    </select>
+    <div class="tb-dd">
+      <select class="tb-sel" bind:value={patternStore.selectedPatternId} title="Pattern">
+        {#each patternStore.patterns as p (p.id)}
+          <option value={p.id}>{p.name}</option>
+        {/each}
+      </select>
+      <svg class="tb-dd-arrow" width="8" height="5" viewBox="0 0 8 5" fill="none" aria-hidden="true">
+        <path d="M1 1 L4 4 L7 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
 
     <div class="tb-spacer"></div>
 
@@ -575,20 +585,41 @@
   }
 
   /* ── Dropdowns ────────────────────────────────────────────────── */
+  .tb-dd {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
   .tb-sel {
+    appearance: none;
+    -webkit-appearance: none;
     background: var(--btn-bg);
     border: 1px solid var(--btn-border);
     color: var(--btn-text);
     font-family: inherit;
     font-size: 11px;
-    padding: 4px 6px;
+    padding: 4px 20px 4px 8px;
     border-radius: 4px;
     cursor: pointer;
     height: 28px;
     outline: none;
     flex-shrink: 0;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
   }
-  .tb-sel:focus { border-color: var(--accent); }
+  .tb-sel:hover { background: var(--btn-hover); color: var(--main-text); }
+  .tb-sel:focus { border-color: var(--accent); color: var(--main-text); }
+  .tb-dd-arrow {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--main-text-muted);
+    pointer-events: none;
+    transition: color 0.1s;
+  }
+  .tb-dd:hover .tb-dd-arrow,
+  .tb-sel:focus + .tb-dd-arrow { color: var(--accent); }
 
   /* ── Spacer + key indicators ─────────────────────────────────── */
   .tb-spacer { flex: 1; }

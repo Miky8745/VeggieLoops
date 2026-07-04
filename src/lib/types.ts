@@ -34,3 +34,10 @@ export interface ChannelData {
   steps: boolean[];
   notes: Note[];
 }
+
+export interface PatternData {
+  id: number;
+  name: string;
+  color: string;
+  lengthBeats: number; // decimals allowed (e.g. for unquantized vocal/mp3 clips)
+}
