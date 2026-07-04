@@ -41,3 +41,10 @@ export interface PatternData {
   color: string;
   lengthBeats: number; // decimals allowed (e.g. for unquantized vocal/mp3 clips)
 }
+
+export interface Placement {
+  id: number;
+  patternId: number;
+  trackId: number;
+  startBeat: number;
+}

@@ -1,4 +1,7 @@
-fn app_root() -> Result<std::path::PathBuf, String> {
+mod project;
+use project::{load_history, load_project, save_history, save_project};
+
+pub(crate) fn app_root() -> Result<std::path::PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     Ok(if cwd.file_name().and_then(|n| n.to_str()) == Some("src-tauri") {
         cwd.parent().unwrap_or(&cwd).to_path_buf()
@@ -7,7 +10,7 @@ fn app_root() -> Result<std::path::PathBuf, String> {
     })
 }
 
-fn projects_root() -> Result<std::path::PathBuf, String> {
+pub(crate) fn projects_root() -> Result<std::path::PathBuf, String> {
     Ok(app_root()?.join("data").join("projects"))
 }
 
@@ -128,7 +131,11 @@ pub fn run() {
             list_data_files,
             create_project,
             get_data_root,
-            read_audio_bytes
+            read_audio_bytes,
+            save_project,
+            load_project,
+            save_history,
+            load_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

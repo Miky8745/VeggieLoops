@@ -11,7 +11,10 @@
   import Playlist from '$lib/components/Playlist.svelte';
   import ChannelRack from '$lib/components/ChannelRack.svelte';
   import PianoRoll from '$lib/components/PianoRoll.svelte';
+  import ProjectShortcuts from '$lib/components/ProjectShortcuts.svelte';
   import { channelStore } from '$lib/channelStore.svelte';
+  import { historyStore } from '$lib/historyStore.svelte';
+  import { saveProject, loadProject, resetAllStores } from '$lib/projectSerializer';
   import type { FileNode } from '$lib/types';
 
   type View = 'home' | 'project';
@@ -62,10 +65,17 @@
     } catch (_) {}
     fileTree = await invoke<FileNode[]>('list_data_files');
     projectName = name;
+
+    const loaded = await loadProject(name);
+    if (!loaded) resetAllStores();
+    await historyStore.init(name);
+    historyStore.startWatching();
+
     view = 'project';
   }
 
   async function exitProject() {
+    historyStore.stopWatching();
     const win = getCurrentWindow();
     try {
       await win.unmaximize();
@@ -76,8 +86,13 @@
     view = 'home';
   }
 
-  const menus = [
-    { name: 'File',     items: [{ label: 'Exit project', action: exitProject }] },
+  let menus = $derived([
+    { name: 'File', items: [
+      { label: 'Save', action: () => saveProject(projectName) },
+      { label: historyStore.autosaveEnabled ? 'Autosave: On' : 'Autosave: Off',
+        action: () => { historyStore.autosaveEnabled = !historyStore.autosaveEnabled; } },
+      { label: 'Exit project', action: exitProject },
+    ] },
     { name: 'Edit',     items: [] },
     { name: 'Add',      items: [] },
     { name: 'Patterns', items: [] },
@@ -85,7 +100,7 @@
     { name: 'Options',  items: [] },
     { name: 'Tools',    items: [] },
     { name: 'Help',     items: [] },
-  ];
+  ]);
 
   onMount(async () => {
     projects = await invoke<string[]>('list_projects');
@@ -113,6 +128,7 @@
     <NewProjectModal bind:show={showModal} onCreated={openProject} />
   </div>
 {:else}
+  <ProjectShortcuts />
   <div class="workspace">
     <Toolbar
       {menus}

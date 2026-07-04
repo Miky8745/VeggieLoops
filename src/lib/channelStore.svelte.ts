@@ -20,6 +20,29 @@ interface PatternContent {
   notes: Note[];
 }
 
+export interface ChannelSettingsExport {
+  id: number;
+  samplePath: string | null;
+  muted: boolean;
+  pan: number;
+  volume: number;
+  mixerTrack: number;
+}
+
+export interface PatternContentEntry {
+  patternId: number;
+  channelId: number;
+  steps: boolean[];
+  notes: Note[];
+}
+
+export interface ChannelStoreExport {
+  channels: ChannelSettingsExport[];
+  content: PatternContentEntry[];
+  beatsPerBar: number;
+  patternLength: number;
+}
+
 class ChannelStore {
   channels = $state<ChannelData[]>([makeChannel(0)]);
   selectedChannelId = $state<number | null>(null);
@@ -84,6 +107,70 @@ class ChannelStore {
       ch.steps = saved ? saved.steps : (Array(16).fill(false) as boolean[]);
       ch.notes = saved ? saved.notes : [];
     }
+  }
+
+  // Flattens channel settings + every pattern's step/note content (including
+  // the currently active pattern, which lives on the live channel objects
+  // rather than in #patternContent) into plain, JSON/XML-serializable data.
+  exportState(currentPatternId: number): ChannelStoreExport {
+    const content: PatternContentEntry[] = [];
+    for (const [patternId, chMap] of this.#patternContent) {
+      for (const [channelId, c] of chMap) {
+        content.push({ patternId, channelId, steps: [...c.steps], notes: c.notes.map(n => ({ ...n })) });
+      }
+    }
+    for (const ch of this.channels) {
+      content.push({ patternId: currentPatternId, channelId: ch.id, steps: [...ch.steps], notes: ch.notes.map(n => ({ ...n })) });
+    }
+    return {
+      channels: this.channels.map(c => ({
+        id: c.id, samplePath: c.samplePath, muted: c.muted,
+        pan: c.pan, volume: c.volume, mixerTrack: c.mixerTrack,
+      })),
+      content,
+      beatsPerBar: this.#beatsPerBar,
+      patternLength: this.#patternLength,
+    };
+  }
+
+  importState(data: ChannelStoreExport, currentPatternId: number) {
+    this.#beatsPerBar = data.beatsPerBar;
+    this.#patternLength = data.patternLength;
+
+    this.#patternContent = new Map();
+    const liveByChannel = new Map<number, PatternContent>();
+    for (const e of data.content) {
+      if (e.patternId === currentPatternId) {
+        liveByChannel.set(e.channelId, { steps: e.steps, notes: e.notes });
+        continue;
+      }
+      let chMap = this.#patternContent.get(e.patternId);
+      if (!chMap) { chMap = new Map(); this.#patternContent.set(e.patternId, chMap); }
+      chMap.set(e.channelId, { steps: e.steps, notes: e.notes });
+    }
+
+    this.channels = data.channels.map(c => {
+      const live = liveByChannel.get(c.id);
+      return {
+        id: c.id, samplePath: c.samplePath, muted: c.muted,
+        pan: c.pan, volume: c.volume, mixerTrack: c.mixerTrack,
+        steps: live ? live.steps : (Array(16).fill(false) as boolean[]),
+        notes: live ? live.notes : [],
+      };
+    });
+
+    nextId = this.channels.reduce((m, c) => Math.max(m, c.id), 0) + 1;
+    // selectedChannelId (which channel the Piano Roll targets) is UI-only —
+    // intentionally left untouched.
+  }
+
+  resetToDefault() {
+    this.channels = [makeChannel(0)];
+    this.selectedChannelId = null;
+    this.#beatsPerBar = 4;
+    this.#patternLength = 16;
+    this.#patternContent = new Map();
+    nextId = 1;
   }
 }
 

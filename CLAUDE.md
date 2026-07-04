@@ -35,7 +35,7 @@ This is a **Tauri v2 desktop app** with two distinct layers:
 
 **Frontend** (`src/`): SvelteKit in **SPA mode** (SSR disabled, `adapter-static` with `fallback: "index.html"`). Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, etc.) is used throughout. All routes live under `src/routes/`. There is no server-side code — SvelteKit is used purely as a client-side framework bundled by Vite.
 
-**Backend** (`src-tauri/`): Rust crate (`veggieloops_lib`). The Tauri app is initialized in `src-tauri/src/lib.rs`; `main.rs` just calls `veggieloops_lib::run()`. Tauri commands are defined with `#[tauri::command]` in `lib.rs` and registered via `invoke_handler`. The frontend calls them with `invoke("command_name", { args })` from `@tauri-apps/api/core`.
+**Backend** (`src-tauri/`): Rust crate (`veggieloops_lib`). The Tauri app is initialized in `src-tauri/src/lib.rs`; `main.rs` just calls `veggieloops_lib::run()`. Tauri commands are defined with `#[tauri::command]` — most in `lib.rs`, but project-file persistence commands live in `src-tauri/src/project.rs` (a separate module, kept apart from the file-tree/project-CRUD commands in `lib.rs`) — and all are registered via `invoke_handler!` in `lib.rs`. The frontend calls them with `invoke("command_name", { args })` from `@tauri-apps/api/core`.
 
 **IPC boundary**: The only communication between frontend and backend is through Tauri's `invoke` mechanism. When adding new backend functionality, define the command in `lib.rs` and register it in `invoke_handler!`.
 
@@ -51,9 +51,12 @@ src/
     +layout.svelte           — pass-through layout (no styles; fonts + reset are in app.html)
     +page.svelte             — single page managing both home and project views (~180 lines)
   lib/
-    types.ts                 — shared TS interfaces: FileNode, FlatNode, MenuItem, ChannelData, Note, PatternData
-    channelStore.svelte.ts   — Svelte 5 class-based shared state: channels, patternLength, selectedChannelId (singleton, same pattern as playbackStore.svelte.ts)
-    patternStore.svelte.ts   — Svelte 5 class-based shared state: patterns (`PatternData[]`, each with id/name/color/lengthBeats), selectedPatternId (+ `selectedPattern` getter), addPattern(). Singleton shared by Toolbar's pattern dropdown and Playlist's patterns panel so both reflect the same pattern list/selection.
+    types.ts                 — shared TS interfaces: FileNode, FlatNode, MenuItem, ChannelData, Note, PatternData, Placement
+    channelStore.svelte.ts   — Svelte 5 class-based shared state: channels, patternLength, selectedChannelId (singleton, same pattern as playbackStore.svelte.ts). Also exposes exportState()/importState()/resetToDefault() for save/undo (see "Undo/redo & saving").
+    patternStore.svelte.ts   — Svelte 5 class-based shared state: patterns (`PatternData[]`, each with id/name/color/lengthBeats), selectedPatternId (+ `selectedPattern` getter), addPattern(). Singleton shared by Toolbar's pattern dropdown and Playlist's patterns panel so both reflect the same pattern list/selection. Also exposes exportState()/importState()/resetToDefault().
+    placementStore.svelte.ts — Svelte 5 class-based shared state: `placements` (`Placement[]`, each with id/patternId/trackId/startBeat) placed on the Playlist timeline. add()/update()/remove()/exportState()/importState()/resetToDefault(). Singleton shared by `Playlist.svelte`.
+    projectSerializer.ts     — `ProjectFileData` (mirrors the Rust `ProjectFile` struct field-for-field). `serializeProject()`/`applyProjectState()` gather/apply the four stores above plus `playback.tempo`; `resetAllStores()`; `saveProject(name)`/`loadProject(name)` (invoke `save_project`/`load_project`).
+    historyStore.svelte.ts   — Svelte 5 class-based singleton: undo/redo stacks (250-entry cap each), autosave toggle, debounced watcher that drives both. See "Undo/redo & saving".
     sampleName.ts             — formatSampleName(path): shared "Drop sample" / prettified-filename label used by ChannelRow and PianoRoll
     pianoroll/
       pitch.ts                — pure pitch/geometry helpers shared by the piano roll components: pitch↔y, step↔x, key/black-key/C-note tests, pixel constants (STEP_W, KEY_H, KEY_COL_W, RULER_H, LANE_H)
@@ -64,6 +67,7 @@ src/
       MenuBar.svelte         — project page menu fragment (no wrapper element): logo SVG + File/Edit/… dropdowns. Embedded inside Toolbar.svelte.
       Toolbar.svelte         — two-row FL Studio-style toolbar (CSS grid 2col × 2row). Row 1: menu section (grey-green) + transport + BPM/POS displays + feature toggles + monitor placeholder + peak meter. Row 2: info box + panel toggle buttons + snap/pattern dropdowns + Shift/Alt/Ctrl indicators. Accepts bindable props: showExplorer, showChannelRack, showPianoRoll, showPlaylist, showMixer.
       FileExplorer.svelte    — activity bar + explorer panel + file tree. Accepts `show` bindable prop; root wrapper uses display:contents / display:none to hide without unmounting.
+      ProjectShortcuts.svelte — no markup, just `<svelte:window onkeydown>` for the global Ctrl/Cmd+Z (undo), Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z (redo), and Ctrl/Cmd+S (save) shortcuts; ignores keydowns targeting an `input`/`textarea`/contenteditable. Mounted once in the project view of `+page.svelte`.
       Playlist.svelte        — FL Studio-style playlist grid (tracks × bars, 4/4 shading, sticky headers) plus a patterns panel docked on the left (see "Playlist patterns panel" below)
       ChannelRack.svelte     — draggable floating window for the channel rack (step sequencer), toggled from toolbar. Sources `channels`/`patternLength` from `channelStore` (not local state) so the Piano Roll can share the same data.
       PianoRoll.svelte       — draggable floating window (same chrome pattern as ChannelRack), toggled from toolbar via `showPianoRoll` and also opened by double-clicking a channel's sample name in the rack. Coordinates the sub-components below and owns tool/selection/scroll-sync state.
@@ -85,7 +89,7 @@ The global reset in `app.html` (mirrored in `app.css`) sets `user-select: none` 
 
 - **Data** — `patternStore.svelte.ts` (singleton) holds the list of `PatternData` (`id`, `name`, `color`, `lengthBeats`) and `selectedPatternId`. The panel and the Toolbar's pattern dropdown both read/write this same store, so selecting a pattern in either place stays in sync. `+` at the bottom of the panel calls `patternStore.addPattern()`.
 - **Pattern length** — edited inline per pattern card via a `ScrollField` (`decimals={2}`, `step={0.25}`), so lengths like `4.5` beats are representable (needed for unquantized audio clips such as vocal takes).
-- **Placing patterns on the timeline** — dragging a pattern card follows the same manual pointer-drag convention as `FileExplorer`'s sample drag (pointerdown → 4px-threshold promotion to a `dragging` state → a cursor-following ghost → drop resolved via `document.elementsFromPoint` looking for a `data-track-id` attribute), rather than native HTML5 drag-and-drop. Dropping over a track row creates a `Placement` (`{ id, patternId, trackId, startBeat }`, local component state — not in the store) snapped to the nearest whole beat. `pixelsPerBeat = barWidth / channelStore.beatsPerBar`, so placement geometry stays correct if the time signature changes.
+- **Placing patterns on the timeline** — dragging a pattern card follows the same manual pointer-drag convention as `FileExplorer`'s sample drag (pointerdown → 4px-threshold promotion to a `dragging` state → a cursor-following ghost → drop resolved via `document.elementsFromPoint` looking for a `data-track-id` attribute), rather than native HTML5 drag-and-drop. Dropping over a track row creates a `Placement` (`{ id, patternId, trackId, startBeat }`, defined in `types.ts`, held in the `placementStore.svelte.ts` singleton — not local component state, so placements participate in save/undo) snapped to the nearest whole beat. `pixelsPerBeat = barWidth / channelStore.beatsPerBar`, so placement geometry stays correct if the time signature changes.
 - **Moving/deleting placements** — dragging an existing placed block re-runs the same drop resolution to relocate it; right-click deletes it (mirrors the Piano Roll's right-click-delete convention). A placement always renders at `pattern.lengthBeats` looked up live (not copied at drop time), so resizing a pattern's length in the panel resizes every placed instance of it.
 
 ## Navigation
@@ -98,12 +102,14 @@ The global reset in `app.html` (mirrored in `app.css`) sets `user-select: none` 
 
 All app data lives under `data/` in the project root (`VeggieLoops/data/`). The Rust backend resolves this via `app_root()` in `lib.rs`, which calls `std::env::current_dir()` and steps up one level if the cwd is `src-tauri/` (which it is during `tauri dev`). `projects_root()` calls `app_root()` and appends `data/projects/`.
 
-- **Projects**: `data/projects/<project-name>/` — one folder per project.
+- **Projects**: `data/projects/<project-name>/` — one folder per project, containing:
+  - `<project-name>.vlp` — the saved project (XML). Written by `save_project`, read by `load_project`. Absent until the first save.
+  - `history` — the undo/redo stacks (plain JSON, not XML — Rust treats its contents as an opaque string). Written/read by `save_history`/`load_history`.
 - **Samples**: `data/samples/` — 1,004 audio files from LMMS (basses, bassloops, beats, drums, drumsynth, effects, instruments, latin, misc, shapes, stringsnpads, waveforms). Re-download via `bash data/samples/download.sh` (run from `data/samples/`).
 
 ## Tauri commands
 
-All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_handler!`.
+Most commands are defined in `src-tauri/src/lib.rs`; project-file persistence commands live in `src-tauri/src/project.rs`. All are registered in one `invoke_handler!` call in `lib.rs`.
 
 | Command | Args | Returns | Description |
 |---|---|---|---|
@@ -113,8 +119,12 @@ All commands are defined in `src-tauri/src/lib.rs` and registered in `invoke_han
 | `list_data_files` | — | `Vec<FileNode>` | Recursive file tree for the entire `data/` directory |
 | `get_data_root` | — | `String` | Absolute path to the `data/` directory |
 | `read_audio_bytes` | `relative_path: String` | `Vec<u8>` | Reads `data/<relative_path>` and returns raw bytes (path traversal blocked) |
+| `save_project` | `name: String, project: ProjectFile` | `()` | Serializes `project` to XML and writes `data/projects/<name>/<name>.vlp` |
+| `load_project` | `name: String` | `Option<ProjectFile>` | Reads/parses `<name>.vlp`; `None` if it doesn't exist yet |
+| `save_history` | `name: String, contents: String` | `()` | Writes the opaque JSON `contents` string to `data/projects/<name>/history` |
+| `load_history` | `name: String` | `Option<String>` | Reads `history` as a raw string; `None` if it doesn't exist yet |
 
-`FileNode` is `{ name: String, is_dir: bool, children: Vec<FileNode> }`.
+`FileNode` is `{ name: String, is_dir: bool, children: Vec<FileNode> }`. `ProjectFile` and its nested structs are defined in `project.rs` — see "Undo/redo & saving" below.
 
 ## Audio / playback
 
@@ -168,7 +178,17 @@ The workspace is divided into three fixed zones. **This hierarchy must be respec
 
 **Never place controlling buttons or displays in the left or workspace zones.** New toolbar controls belong in `Toolbar.svelte`; new left-panel structures belong inside/beside `FileExplorer.svelte`.
 
-Entered via `openProject(name)`: sets window title, maximizes, loads file tree, sets `view = 'project'`. File → "Exit project" calls `exitProject()`: unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
+Entered via `openProject(name)`: sets window title, maximizes, loads file tree, loads the project's saved `.vlp` (or resets all stores to blank if none exists yet), initializes and starts the undo/redo history watcher, sets `view = 'project'`. File → "Exit project" calls `exitProject()`: stops the history watcher, unmaximizes, restores 800×600, centers, resets title, sets `view = 'home'`.
+
+## Undo/redo & saving
+
+- **One debounced watcher drives both undo/redo history and autosave**, rather than instrumenting every mutation call site (which are scattered across `NoteGrid.svelte`, `ChannelRow.svelte`, `ChannelRack.svelte`, `Playlist.svelte`, and the stores themselves). `historyStore.svelte.ts`'s `startWatching()` opens a standalone reactive root via `$effect.root()` (required since this is a plain module singleton, not a component — a bare `$effect` has no parent effect context to attach to) containing an `$effect` that re-serializes the whole project on every reactive flush and, whenever the serialized JSON differs from the last-committed one, (re)arms a 1000ms `setTimeout`. When 1 second passes with no further changes, it commits: pushes the pre-change snapshot onto the undo stack (`past`, capped at 250, oldest dropped first), clears the redo stack (`future`), persists both to the project's `history` file, and — if `historyStore.autosaveEnabled` (off by default, toggled via File → "Autosave: On/Off") — also calls `saveProject()`.
+- **`undo()`/`redo()`** (`historyStore.svelte.ts`) are standard past/future stack swaps built on `applyProjectState()`.
+- **What counts as project state** (saved to `.vlp` *and* snapshotted for undo) — `src/lib/projectSerializer.ts`'s `ProjectFileData`: `channelStore` (channel settings + every pattern's steps/notes, beatsPerBar, patternLength), `patternStore` (patterns + selectedPatternId), `placementStore` (playlist placements), and `playback.tempo`. Explicitly excluded: `isPlaying`/`currentStep` (playback-only) and any UI selection state (e.g. `channelStore.selectedChannelId`) — these are ephemeral and reset per session.
+- **Why every store needs `exportState()`/`importState()`** — `channelStore`'s per-pattern step/note content lives in a private `Map` (not JSON/XML-serializable), and it's the only place that knows how to flatten it (merging the currently-active pattern's *live* content, which isn't in the map, with every other pattern's *stashed* content, which is). `patternStore.importState()` sets `#selectedPatternId` directly rather than through its public setter, which would otherwise call `channelStore.switchPattern` and corrupt the import (that swap logic is exactly what full-state import needs to bypass — it already restores every pattern's content wholesale). All four stores recompute their module-scope `nextId` counter after import (`max(existing ids) + 1`) so newly created objects post-undo/load never collide with restored ids.
+- **XML on the Rust side** (`src-tauri/src/project.rs`, using `quick-xml`'s serde support) — every struct is `#[serde(rename_all = "camelCase")]` so field names match the plain JSON object the frontend passes to `invoke('save_project', { name, project })` (Tauri IPC args are always JSON, regardless of what Rust does with them afterward — this attribute is what makes e.g. `sample_path`/`samplePath` line up). quick-xml repeats a bare `Vec<T>` field's own tag name per element rather than giving each item its own tag, so the four top-level lists (`channels`, `content`, `patterns`, `placements`) are each wrapped in a small struct with a renamed inner field (e.g. `ChannelsXml { #[serde(rename = "channel")] items: Vec<ChannelSettings> }`) to get clean per-item XML tags. `projectSerializer.ts`'s `ProjectFileData` mirrors this wrapper shape exactly (e.g. `channels: { channel: [...] }`) so it deserializes cleanly on the Rust side.
+- **The `history` file is deliberately untyped on the Rust side** — `save_history`/`load_history` just read/write a plain JSON string; only `.vlp` needs to be real XML, so there's no reason for Rust to understand the history file's internal shape (avoids a second parallel struct family).
+- **Known tradeoff, not yet a problem** — the watcher's `$effect` re-serializes and diffs the *entire* project on every reactive flush, not just once per second; the 1000ms timer only gates the final commit (stack push + disk write), not the stringify-and-diff work itself. During a fast gesture (dragging a note's length, painting steps) this could re-run many times per second. Left as-is for now since the ask was for something simple; if it ever causes jank, the fix is splitting the watcher into a cheap "dirty" flag effect plus a `setInterval`-driven poll that only stringifies while dirty.
 
 ## Piano Roll
 

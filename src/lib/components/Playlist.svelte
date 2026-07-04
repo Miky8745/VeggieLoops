@@ -3,7 +3,8 @@
   import ScrollField from './ScrollField.svelte';
   import { patternStore } from '$lib/patternStore.svelte';
   import { channelStore } from '$lib/channelStore.svelte';
-  import type { PatternData } from '$lib/types';
+  import { placementStore } from '$lib/placementStore.svelte';
+  import type { PatternData, Placement } from '$lib/types';
 
   const TRACK_PANEL_W = 180;
   const PATTERNS_PANEL_W = 168;
@@ -13,13 +14,6 @@
     id: number;
     name: string;
     color: string;
-  }
-
-  interface Placement {
-    id: number;
-    patternId: number;
-    trackId: number;
-    startBeat: number;
   }
 
   let { show = $bindable(true), workspaceBounds }: { show?: boolean; workspaceBounds: WorkspaceBounds } = $props();
@@ -59,8 +53,6 @@
   }
 
   // ── Pattern placements (drag from the patterns panel onto the timeline) ──
-  let placements = $state<Placement[]>([]);
-  let nextPlacementId = 1;
   let gridEl = $state<HTMLDivElement | undefined>();
 
   type DragState = { patternId: number; x: number; y: number; placementId?: number; grabBeat: number };
@@ -100,7 +92,7 @@
   }
 
   function removePlacement(id: number) {
-    placements = placements.filter(p => p.id !== id);
+    placementStore.remove(id);
   }
 
   $effect(() => {
@@ -125,10 +117,9 @@
           const rawBeat = (dragging.x - rect.left - TRACK_PANEL_W) / pixelsPerBeat - dragging.grabBeat;
           const startBeat = Math.max(0, Math.round(rawBeat));
           if (dragging.placementId != null) {
-            const id = dragging.placementId;
-            placements = placements.map(p => p.id === id ? { ...p, trackId, startBeat } : p);
+            placementStore.update(dragging.placementId, { trackId, startBeat });
           } else {
-            placements = [...placements, { id: nextPlacementId++, patternId: dragging.patternId, trackId, startBeat }];
+            placementStore.add(dragging.patternId, trackId, startBeat);
           }
         }
       }
@@ -243,7 +234,7 @@
               style="background: {cellBg(bi)};"
             ></div>
           {/each}
-          {#each placements.filter(p => p.trackId === track.id) as placement (placement.id)}
+          {#each placementStore.placements.filter(p => p.trackId === track.id) as placement (placement.id)}
             {@const pattern = patternOf(placement.patternId)}
             {#if pattern}
               <div

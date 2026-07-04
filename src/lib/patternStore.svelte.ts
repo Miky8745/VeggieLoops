@@ -8,6 +8,11 @@ const PATTERN_COLORS = [
 
 let nextId = 2;
 
+export interface PatternStoreExport {
+  patterns: PatternData[];
+  selectedPatternId: number;
+}
+
 function makePattern(id: number): PatternData {
   return {
     id,
@@ -43,6 +48,29 @@ class PatternStore {
     this.patterns.push(pattern);
     this.selectedPatternId = pattern.id;
     return pattern;
+  }
+
+  exportState(): PatternStoreExport {
+    return {
+      patterns: this.patterns.map(p => ({ ...p })),
+      selectedPatternId: this.#selectedPatternId,
+    };
+  }
+
+  // Bypasses the public selectedPatternId setter — it would call
+  // channelStore.switchPattern, which must not run during a full-state
+  // import since channelStore.importState already restores every pattern's
+  // content wholesale.
+  importState(data: PatternStoreExport) {
+    this.patterns = data.patterns.map(p => ({ ...p }));
+    this.#selectedPatternId = data.selectedPatternId;
+    nextId = this.patterns.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+  }
+
+  resetToDefault() {
+    this.patterns = [makePattern(1)];
+    this.#selectedPatternId = 1;
+    nextId = 2;
   }
 }
 
