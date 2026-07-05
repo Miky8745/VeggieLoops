@@ -1,5 +1,6 @@
 import type { PatternData } from './types';
 import { channelStore } from './channelStore.svelte';
+import { playback } from './playbackStore.svelte';
 
 const PATTERN_COLORS = [
   '#90C396', '#E0A458', '#5B8DB8', '#C97064',
@@ -37,6 +38,7 @@ class PatternStore {
     if (id === this.#selectedPatternId) return;
     channelStore.switchPattern(this.#selectedPatternId, id);
     this.#selectedPatternId = id;
+    playback.restartFromZero();
   }
 
   get selectedPattern(): PatternData | null {

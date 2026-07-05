@@ -3,6 +3,8 @@
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
   import { formatSampleName } from '$lib/sampleName';
+  import { channelStore } from '$lib/channelStore.svelte';
+  import MiniNoteRoll from './pianoroll/MiniNoteRoll.svelte';
 
   let {
     channel,
@@ -81,6 +83,8 @@
   function stepGroup(i: number) {
     return Math.floor(i / 4) % 2; // 0 or 1
   }
+
+  // Mini piano-roll preview (replaces the step buttons for note-based channels)
 </script>
 
 <svelte:window onpointerup={globalPointerup} />
@@ -128,23 +132,27 @@
     title="Select"
   ></button>
 
-  <!-- Sequencer buttons -->
+  <!-- Sequencer buttons / mini piano-roll preview -->
   <div class="steps">
-    {#each channel.steps as active, i}
-      {@const grp = stepGroup(i)}
-      <button
-        class="step"
-        class:step--on={active}
-        class:step--grey={grp === 0}
-        class:step--orange={grp === 1}
-        class:step--playing={i === activeStep}
-        onmousedown={(e) => stepMousedown(e, i)}
-        onpointerenter={(e) => stepPointerenter(e, i)}
-        oncontextmenu={(e) => e.preventDefault()}
-        aria-label="Step {i + 1}"
-        aria-pressed={active}
-      ></button>
-    {/each}
+    {#if channel.notes.length > 0}
+      <MiniNoteRoll notes={channel.notes} patternLength={channelStore.patternLength} {activeStep} />
+    {:else}
+      {#each channel.steps as active, i}
+        {@const grp = stepGroup(i)}
+        <button
+          class="step"
+          class:step--on={active}
+          class:step--grey={grp === 0}
+          class:step--orange={grp === 1}
+          class:step--playing={i === activeStep}
+          onmousedown={(e) => stepMousedown(e, i)}
+          onpointerenter={(e) => stepPointerenter(e, i)}
+          oncontextmenu={(e) => e.preventDefault()}
+          aria-label="Step {i + 1}"
+          aria-pressed={active}
+        ></button>
+      {/each}
+    {/if}
   </div>
 </div>
 

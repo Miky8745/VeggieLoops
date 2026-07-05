@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
   import ChannelRow from './ChannelRow.svelte';
@@ -11,8 +10,14 @@
   let {
     show = $bindable(),
     workspaceBounds,
+    showPianoRollOverview = $bindable(false),
     onOpenPianoRoll,
-  }: { show: boolean; workspaceBounds: WorkspaceBounds; onOpenPianoRoll: (channelId: number) => void } = $props();
+  }: {
+    show: boolean;
+    workspaceBounds: WorkspaceBounds;
+    showPianoRollOverview?: boolean;
+    onOpenPianoRoll: (channelId: number) => void;
+  } = $props();
 
   // ── Name column resize ─────────────────────────────────────────────
   let nameColWidth = $state(140);
@@ -42,54 +47,9 @@
   let loopStart   = $state(false);
   let loopMode    = $state(false);
   let graphEditor = $state(false);
-  let prOverview  = $state(false);
 
   // ── Swing ─────────────────────────────────────────────────────────
   let swing = $state(0);
-
-  // ── Playback / audio engine ────────────────────────────────────────
-  let rafId = 0;
-
-  function startRaf() {
-    function frame() {
-      if (!playback.isPlaying) return;
-      const elapsed = audioEngine.currentTime - audioEngine.startAudioTime;
-      if (elapsed >= 0) {
-        playback.currentStep = Math.floor(elapsed / audioEngine.stepDuration) % channelStore.patternLength;
-      }
-      rafId = requestAnimationFrame(frame);
-    }
-    cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(frame);
-  }
-
-  function stopRaf() {
-    cancelAnimationFrame(rafId);
-    rafId = 0;
-  }
-
-  // Using getter closures so channels/tempo are read live inside the engine
-  // without becoming reactive dependencies of this effect.
-  $effect(() => {
-    if (playback.isPlaying) {
-      audioEngine.stop();
-      audioEngine.start(
-        () => playback.tempo,
-        () => channelStore.channels,
-        channelStore.patternLength,
-      );
-      startRaf();
-    } else {
-      audioEngine.stop();
-      stopRaf();
-      playback.currentStep = -1;
-    }
-  });
-
-  onDestroy(() => {
-    audioEngine.stop();
-    stopRaf();
-  });
 
   // ── Dropdowns ──────────────────────────────────────────────────────
   let optionsOpen = $state(false);
@@ -227,7 +187,14 @@
         <button
           class="hdr-btn hdr-tgl"
           class:hdr-tgl--on={playback.isPlaying}
-          onclick={(e) => { e.stopPropagation(); playback.isPlaying = !playback.isPlaying; }}
+          onclick={(e) => {
+            e.stopPropagation();
+            if (!playback.isPlaying) {
+              playback.soloChannelId = null;
+              if (playback.transportMode === 'song') playback.transportMode = 'pattern';
+            }
+            playback.isPlaying = !playback.isPlaying;
+          }}
           aria-label={playback.isPlaying ? 'Stop' : 'Play'}
           title={playback.isPlaying ? 'Stop' : 'Play'}
         >
@@ -308,8 +275,8 @@
         <!-- 11. Piano roll overview -->
         <button
           class="hdr-btn hdr-tgl"
-          class:hdr-tgl--on={prOverview}
-          onclick={(e) => { e.stopPropagation(); prOverview = !prOverview; }}
+          class:hdr-tgl--on={showPianoRollOverview}
+          onclick={(e) => { e.stopPropagation(); showPianoRollOverview = !showPianoRollOverview; }}
           aria-label="Piano roll overview"
           title="Piano roll overview"
         >

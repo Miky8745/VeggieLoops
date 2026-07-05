@@ -21,13 +21,11 @@
   } = $props();
 
   // Transport
-  let isPlaying   = $state(false);
   let isPaused    = $state(false);
   let isRecording = $state(false);
 
-  // Display — tempo is sourced from the shared playback store
+  // Display — tempo/isPlaying/mode are sourced from the shared playback store
   let position     = $state({ beat: 1, step: 1, tick: 0 });
-  let patternMode  = $state<'pattern' | 'song'>('pattern');
 
   // Row-1 toggles
   let typingKeyboard = $state(false);
@@ -71,16 +69,19 @@
   });
 
   function play() {
-    if (isPlaying) { isPlaying = false; isPaused = false; }
-    else           { isPlaying = true;  isPaused = false; }
+    isPaused = false;
+    playback.soloChannelId = null;
+    playback.isPlaying = !playback.isPlaying;
   }
   function stop() {
-    isPlaying = false; isPaused = false;
+    isPaused = false;
+    playback.soloChannelId = null;
+    playback.isPlaying = false;
     position = { beat: 1, step: 1, tick: 0 };
   }
   function pause() {
-    if (isPlaying)      { isPlaying = false; isPaused = true; }
-    else if (isPaused)  { isPlaying = true;  isPaused = false; }
+    if (playback.isPlaying)  { playback.isPlaying = false; isPaused = true; }
+    else if (isPaused)       { playback.isPlaying = true;  isPaused = false; }
   }
 
   function onTempoWheel(e: WheelEvent) {
@@ -103,22 +104,23 @@
     <!-- Pattern / Song mode switch -->
     <div class="tb-vsep"></div>
     <div class="tb-patsng" role="group" aria-label="Playback mode">
+      <div class="tb-patsng-pill" style="transform: translateX({playback.transportMode === 'song' ? '100%' : '0'})"></div>
       <button
         class="tb-patsng-btn"
-        class:tb-patsng-btn--on={patternMode === 'pattern'}
-        onclick={() => patternMode = 'pattern'}
+        class:tb-patsng-btn--on={playback.transportMode === 'pattern'}
+        onclick={() => playback.transportMode = 'pattern'}
       >PAT</button>
       <button
         class="tb-patsng-btn"
-        class:tb-patsng-btn--on={patternMode === 'song'}
-        onclick={() => patternMode = 'song'}
+        class:tb-patsng-btn--on={playback.transportMode === 'song'}
+        onclick={() => playback.transportMode = 'song'}
       >SNG</button>
     </div>
 
     <!-- Transport buttons: Play · Stop · Pause · Record -->
     <div class="tb-vsep"></div>
     <div class="tb-transport">
-      <button class="tb-xp" class:tb-xp--on={isPlaying} onclick={play} title="Play">
+      <button class="tb-xp" class:tb-xp--on={playback.isPlaying} onclick={play} title="Play">
         <svg width="12" height="13" viewBox="0 0 12 13" fill="currentColor" aria-hidden="true">
           <path d="M1 1 L11 6.5 L1 12 Z"/>
         </svg>
@@ -418,12 +420,24 @@
 
   /* ── Pattern / Song switch ───────────────────────────────────── */
   .tb-patsng {
+    position: relative;
     display: flex;
     border: 1px solid var(--sidebar-border);
     border-radius: 4px;
     overflow: hidden;
   }
+  .tb-patsng-pill {
+    position: absolute;
+    inset: 0;
+    width: 50%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+  }
   .tb-patsng-btn {
+    position: relative;
+    z-index: 1;
     background: transparent;
     border: none;
     color: var(--btn-text);
@@ -433,16 +447,13 @@
     letter-spacing: 0.05em;
     padding: 5px 9px;
     cursor: pointer;
-    transition: background 0.1s, color 0.1s;
+    transition: color 0.15s;
     line-height: 1;
   }
-  .tb-patsng-btn + .tb-patsng-btn { border-left: 1px solid var(--sidebar-border); }
   .tb-patsng-btn--on {
-    background: var(--accent);
     color: #fff;
   }
   .tb-patsng-btn:not(.tb-patsng-btn--on):hover {
-    background: rgba(255, 255, 255, 0.06);
     color: var(--main-text);
   }
 

@@ -12,14 +12,18 @@
     selectedNoteIds = $bindable(),
     patternLength,
     activeStep = -1,
+    currentStepFraction = -1,
     onScroll,
+    onViewportResize,
   }: {
     channel: ChannelData;
     tool: 'draw' | 'select';
     selectedNoteIds: Set<number>;
     patternLength: number;
     activeStep?: number;
+    currentStepFraction?: number;
     onScroll: (scrollLeft: number, scrollTop: number) => void;
+    onViewportResize?: (width: number) => void;
   } = $props();
 
   const pitches = Array.from({ length: MAX_PITCH - MIN_PITCH + 1 }, (_, i) => MAX_PITCH - i);
@@ -288,11 +292,31 @@
     onScroll(el.scrollLeft, el.scrollTop);
   }
 
+  // Lets a parent (e.g. the minimap/overview panel) teleport this viewport's
+  // scroll position from outside — setting scrollLeft/scrollTop fires the
+  // native onscroll handler above, so callers get their own scroll state
+  // (and any overlay derived from it) corrected to the real post-clamp value
+  // for free, with no extra plumbing.
+  export function scrollTo(x: number, y: number) {
+    if (!viewportEl) return;
+    viewportEl.scrollLeft = x;
+    viewportEl.scrollTop = y;
+  }
+
   onMount(() => {
     if (!viewportEl) return;
     const target = Math.max(0, pitchToY(DEFAULT_CENTER_PITCH) - viewportEl.clientHeight / 2);
     viewportEl.scrollTop = target;
     onScroll(viewportEl.scrollLeft, viewportEl.scrollTop);
+    onViewportResize?.(viewportEl.clientWidth);
+  });
+
+  $effect(() => {
+    if (!viewportEl) return;
+    const el = viewportEl;
+    const ro = new ResizeObserver(() => onViewportResize?.(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
   });
 </script>
 
@@ -326,6 +350,10 @@
 
     {#if activeStep >= 0}
       <div class="playhead" style="left:{stepToX(activeStep)}px; width:{STEP_W}px;"></div>
+    {/if}
+
+    {#if currentStepFraction >= 0}
+      <div class="playhead-line" style="left:{currentStepFraction * STEP_W}px;"></div>
     {/if}
 
     {#each channel.notes as note (note.id)}
@@ -398,6 +426,17 @@
     border-radius: 2px;
     z-index: 3;
     cursor: default;
+  }
+
+  .playhead-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #fff;
+    box-shadow: 0 0 4px rgba(255,255,255,0.6);
+    pointer-events: none;
+    z-index: 4;
   }
 
   .note--selected {

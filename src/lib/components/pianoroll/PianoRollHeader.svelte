@@ -3,16 +3,20 @@
     title,
     tool = $bindable(),
     maximized,
+    isPlaying,
     onClose,
     onDragStart,
     onToggleMaximize,
+    onTogglePlay,
   }: {
     title: string;
     tool: 'draw' | 'select';
     maximized: boolean;
+    isPlaying: boolean;
     onClose: () => void;
     onDragStart: (e: MouseEvent) => void;
     onToggleMaximize: () => void;
+    onTogglePlay: () => void;
   } = $props();
 </script>
 
@@ -39,6 +43,24 @@
       <svg viewBox="0 0 14 14" fill="currentColor">
         <path d="M2 1l9 5.5-3.6 1L9.5 12l-1.7.8-2-4.5L3 10.7z"/>
       </svg>
+    </button>
+    <button
+      class="hdr-btn hdr-tgl"
+      class:hdr-tgl--on={isPlaying}
+      onclick={(e) => { e.stopPropagation(); onTogglePlay(); }}
+      aria-label={isPlaying ? 'Stop' : 'Play'}
+      title={isPlaying ? 'Stop' : 'Play'}
+    >
+      {#if isPlaying}
+        <svg viewBox="0 0 14 14" fill="currentColor">
+          <rect x="3" y="3" width="3" height="8" rx="0.5"/>
+          <rect x="8" y="3" width="3" height="8" rx="0.5"/>
+        </svg>
+      {:else}
+        <svg viewBox="0 0 14 14" fill="currentColor">
+          <path d="M4 2.5l7 4.5-7 4.5z"/>
+        </svg>
+      {/if}
     </button>
   </div>
 

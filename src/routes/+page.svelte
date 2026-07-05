@@ -14,6 +14,7 @@
   import ProjectShortcuts from '$lib/components/ProjectShortcuts.svelte';
   import { channelStore } from '$lib/channelStore.svelte';
   import { historyStore } from '$lib/historyStore.svelte';
+  import { playback } from '$lib/playbackStore.svelte';
   import { saveProject, loadProject, resetAllStores } from '$lib/projectSerializer';
   import type { FileNode } from '$lib/types';
 
@@ -31,6 +32,7 @@
   let showChannelRack = $state(false);
   let showPianoRoll   = $state(false);
   let showMixer       = $state(false);
+  let showPianoRollOverview = $state(false);
 
   // The zone to the right of the file explorer and below the toolbar — this
   // is what "maximize" fills for the Playlist/ChannelRack/PianoRoll floating
@@ -70,12 +72,14 @@
     if (!loaded) resetAllStores();
     await historyStore.init(name);
     historyStore.startWatching();
+    playback.startWatching();
 
     view = 'project';
   }
 
   async function exitProject() {
     historyStore.stopWatching();
+    playback.stopWatching();
     const win = getCurrentWindow();
     try {
       await win.unmaximize();
@@ -149,12 +153,13 @@
     <ChannelRack
       bind:show={showChannelRack}
       {workspaceBounds}
+      bind:showPianoRollOverview
       onOpenPianoRoll={(channelId) => {
         channelStore.selectedChannelId = channelId;
         showPianoRoll = true;
       }}
     />
-    <PianoRoll bind:show={showPianoRoll} {workspaceBounds} />
+    <PianoRoll bind:show={showPianoRoll} {workspaceBounds} bind:showPianoRollOverview />
   </div>
 {/if}
 

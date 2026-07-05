@@ -9,13 +9,20 @@
   import PianoRollRuler from './pianoroll/PianoRollRuler.svelte';
   import NoteGrid from './pianoroll/NoteGrid.svelte';
   import VelocityLane from './pianoroll/VelocityLane.svelte';
+  import PianoRollOverview from './pianoroll/PianoRollOverview.svelte';
 
-  let { show = $bindable(), workspaceBounds }: { show: boolean; workspaceBounds: WorkspaceBounds } = $props();
+  let {
+    show = $bindable(),
+    workspaceBounds,
+    showPianoRollOverview = $bindable(false),
+  }: { show: boolean; workspaceBounds: WorkspaceBounds; showPianoRollOverview?: boolean } = $props();
 
   let tool = $state<'draw' | 'select'>('draw');
   let selectedNoteIds = $state(new Set<number>());
   let gridScrollLeft = $state(0);
   let gridScrollTop = $state(0);
+  let gridViewportWidth = $state(0);
+  let noteGridRef: NoteGrid | undefined = $state();
 
   let channel = $derived(channelStore.selectedChannel);
   let channelName = $derived(channel ? formatSampleName(channel.samplePath) : 'No channel');
@@ -48,6 +55,21 @@
     gridScrollLeft = left;
     gridScrollTop = top;
   }
+
+  function handleSeek(x: number) {
+    noteGridRef?.scrollTo(x, gridScrollTop);
+  }
+
+  // Playing from the Piano Roll's own button solos just this channel — the
+  // shared clock/engine still only ever runs once (see playbackStore).
+  function handleTogglePlay() {
+    if (playback.isPlaying) {
+      playback.isPlaying = false;
+    } else if (channel) {
+      playback.soloChannelId = channel.id;
+      playback.isPlaying = true;
+    }
+  }
 </script>
 
 {#if channel}
@@ -58,36 +80,77 @@
     minWidth={400} minHeight={260}
   >
     {#snippet header({ onDragStart, maximized, toggleMaximize })}
-      <PianoRollHeader bind:tool title={channelName} {maximized} onClose={close} onDragStart={onDragStart} onToggleMaximize={toggleMaximize} />
+      <PianoRollHeader
+        bind:tool
+        title={channelName}
+        {maximized}
+        isPlaying={playback.isPlaying}
+        onClose={close}
+        onDragStart={onDragStart}
+        onToggleMaximize={toggleMaximize}
+        onTogglePlay={handleTogglePlay}
+      />
     {/snippet}
 
-    <div class="pr-body" style="--key-col-w:{KEY_COL_W}px; --ruler-h:{RULER_H}px; --lane-h:{LANE_H}px;">
-      <div class="pr-corner"></div>
-      <div class="pr-ruler-slot">
-        <PianoRollRuler patternLength={channelStore.patternLength} scrollLeft={gridScrollLeft} activeStep={playback.currentStep} />
-      </div>
-      <div class="pr-keys-slot">
-        <PianoKeys scrollTop={gridScrollTop} />
-      </div>
-      <div class="pr-grid-slot">
-        <NoteGrid
-          {channel}
-          {tool}
-          bind:selectedNoteIds
-          patternLength={channelStore.patternLength}
-          activeStep={playback.currentStep}
-          onScroll={handleScroll}
-        />
-      </div>
-      <div class="pr-vel-corner"></div>
-      <div class="pr-vel-slot">
-        <VelocityLane {channel} {selectedNoteIds} scrollLeft={gridScrollLeft} patternLength={channelStore.patternLength} />
+    <div class="pr-shell">
+      {#if showPianoRollOverview}
+        <div class="pr-overview-slot">
+          <PianoRollOverview
+            {channel}
+            patternLength={channelStore.patternLength}
+            activeStep={playback.currentStep}
+            scrollLeft={gridScrollLeft}
+            viewportWidth={gridViewportWidth}
+            onSeek={handleSeek}
+          />
+        </div>
+      {/if}
+      <div class="pr-body" style="--key-col-w:{KEY_COL_W}px; --ruler-h:{RULER_H}px; --lane-h:{LANE_H}px;">
+        <div class="pr-corner"></div>
+        <div class="pr-ruler-slot">
+          <PianoRollRuler patternLength={channelStore.patternLength} scrollLeft={gridScrollLeft} activeStep={playback.currentStep} />
+        </div>
+        <div class="pr-keys-slot">
+          <PianoKeys scrollTop={gridScrollTop} />
+        </div>
+        <div class="pr-grid-slot">
+          <NoteGrid
+            bind:this={noteGridRef}
+            {channel}
+            {tool}
+            bind:selectedNoteIds
+            patternLength={channelStore.patternLength}
+            activeStep={playback.currentStep}
+            currentStepFraction={playback.isPlaying ? playback.currentStepFraction : -1}
+            onScroll={handleScroll}
+            onViewportResize={(w) => gridViewportWidth = w}
+          />
+        </div>
+        <div class="pr-vel-corner"></div>
+        <div class="pr-vel-slot">
+          <VelocityLane {channel} {selectedNoteIds} scrollLeft={gridScrollLeft} patternLength={channelStore.patternLength} />
+        </div>
       </div>
     </div>
   </FloatingWindow>
 {/if}
 
 <style>
+  .pr-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .pr-overview-slot {
+    flex-shrink: 0;
+    height: 40px;
+    padding: 4px 8px;
+    background: #181818;
+    border-bottom: 1px solid var(--explorer-border, #3f484e);
+  }
+
   .pr-body {
     flex: 1;
     min-height: 0;
