@@ -218,14 +218,14 @@
       <div class="hdr-right">
         <!-- 7. Swing dial -->
         <div class="dial-group">
-          <Dial bind:value={swing} defaultValue={0} showArc={true} size={26} sensitivity={180} />
+          <Dial bind:value={swing} defaultValue={0} showArc={true} size={26} sensitivity={180} tooltipKey="SWING" />
           <span class="dial-label">SWING</span>
         </div>
 
         <!-- 8. Time signature (beats per bar; denominator fixed at quarter notes) -->
         <div class="sf-group">
           <span class="ts-wrap">
-            <ScrollField bind:value={channelStore.beatsPerBar} min={1} max={16} width={16} />
+            <ScrollField bind:value={channelStore.beatsPerBar} min={1} max={16} width={16} tooltipKey="TIME SIG" />
             <span class="ts-slash">/4</span>
           </span>
           <span class="dial-label">TIME SIG</span>
@@ -239,6 +239,7 @@
             max={channelStore.barLength * 64}
             step={channelStore.barLength}
             width={34}
+            tooltipKey="LEN"
           />
           <span class="dial-label">LEN</span>
         </div>

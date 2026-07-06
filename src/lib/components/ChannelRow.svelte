@@ -4,6 +4,7 @@
   import ScrollField from './ScrollField.svelte';
   import { formatChannelLabel } from '$lib/sampleName';
   import { channelStore } from '$lib/channelStore.svelte';
+  import { channelLoopLength } from '$lib/channelLoop';
   import MiniNoteRoll from './pianoroll/MiniNoteRoll.svelte';
 
   let {
@@ -25,6 +26,11 @@
     onSampleDrop: (drop: FileDropDetail) => void;
     onOpenPianoRoll: () => void;
   } = $props();
+
+  function formatPan(v: number): string {
+    if (v === 0.5) return 'C';
+    return v < 0.5 ? `L${Math.round((0.5 - v) * 200)}` : `R${Math.round((v - 0.5) * 200)}`;
+  }
 
   // Paint mode shared across all rows via module-level state
   // (reset on global pointerup)
@@ -53,6 +59,14 @@
 
   let sampleLabel = $derived(formatChannelLabel(channel));
   let isEmpty = $derived(channel.samplePath === null && channel.sampleFolder === null);
+
+  // This channel may loop independently at a shorter length than the shared
+  // pattern (e.g. a 1-bar kick inside a 4-bar pattern) — activeStep is fed
+  // the raw, whole-pattern step, so it must be wrapped to this channel's own
+  // loop length before comparing against the fixed 0-15 step buttons/preview,
+  // otherwise the highlight only shows during the pattern's first cycle.
+  let chLoopLength = $derived(channelLoopLength(channel, channelStore.activeLength, channelStore.barLength));
+  let wrappedStep = $derived(activeStep >= 0 ? activeStep % chLoopLength : -1);
 
   // Sequencer paint
   let painting = $state<boolean | null>(null); // true=activate, false=deactivate
@@ -100,13 +114,13 @@
   ></button>
 
   <!-- Pan dial -->
-  <Dial bind:value={channel.pan} defaultValue={0.5} size={24} sensitivity={150} />
+  <Dial bind:value={channel.pan} defaultValue={0.5} size={24} sensitivity={150} tooltipKey="PAN" format={formatPan} />
 
   <!-- Volume dial -->
-  <Dial bind:value={channel.volume} defaultValue={0.8} size={24} sensitivity={150} />
+  <Dial bind:value={channel.volume} defaultValue={0.8} size={24} sensitivity={150} tooltipKey="VOLUME" />
 
   <!-- Mixer track -->
-  <ScrollField bind:value={channel.mixerTrack} min={0} max={125} width={30} />
+  <ScrollField bind:value={channel.mixerTrack} min={0} max={125} width={30} tooltipKey="MIXER TRACK" />
 
   <!-- Sample drop zone -->
   <div
@@ -135,7 +149,7 @@
   <!-- Sequencer buttons / mini piano-roll preview -->
   <div class="steps">
     {#if channel.notes.length > 0}
-      <MiniNoteRoll notes={channel.notes} patternLength={channelStore.patternLength} {activeStep} />
+      <MiniNoteRoll notes={channel.notes} patternLength={chLoopLength} activeStep={wrappedStep} />
     {:else}
       {#each channel.steps as active, i}
         {@const grp = stepGroup(i)}
@@ -144,7 +158,7 @@
           class:step--on={active}
           class:step--grey={grp === 0}
           class:step--orange={grp === 1}
-          class:step--playing={i === activeStep}
+          class:step--playing={i === wrappedStep}
           onmousedown={(e) => stepMousedown(e, i)}
           onpointerenter={(e) => stepPointerenter(e, i)}
           oncontextmenu={(e) => e.preventDefault()}

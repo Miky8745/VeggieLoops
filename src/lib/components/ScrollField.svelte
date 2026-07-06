@@ -1,27 +1,31 @@
 <script lang="ts">
+  import DragTooltip from './DragTooltip.svelte';
+
   let {
-    value    = $bindable(1),
-    min      = 0,
-    max      = 999,
-    step     = 1,
-    decimals = 0,
-    width    = 36,
-    label    = '',
+    value      = $bindable(1),
+    min        = 0,
+    max        = 999,
+    step       = 1,
+    decimals   = 0,
+    width      = 36,
+    label      = '',
+    tooltipKey = '',
   }: {
-    value?:    number;
-    min?:      number;
-    max?:      number;
-    step?:     number;
-    decimals?: number;
-    width?:    number;
-    label?:    string;
+    value?:      number;
+    min?:        number;
+    max?:        number;
+    step?:       number;
+    decimals?:   number;
+    width?:      number;
+    label?:      string;
+    tooltipKey?: string;
   } = $props();
 
   let display = $derived(value.toFixed(decimals));
 
   let dragStartY = 0;
   let dragStartVal = 0;
-  let dragging = false;
+  let dragging = $state(false);
 
   function clamp(v: number) {
     return Math.max(min, Math.min(max, v));
@@ -59,10 +63,14 @@
   {#if label}
     <span class="sf-label">{label}</span>
   {/if}
+  {#if dragging && tooltipKey}
+    <DragTooltip keyLabel={tooltipKey} valueText={label ? `${display} ${label}` : display} />
+  {/if}
 </div>
 
 <style>
   .sf-wrap {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;

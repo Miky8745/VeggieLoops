@@ -32,7 +32,8 @@ class PlaybackStore {
           audioEngine.start(
             () => this.tempo,
             () => this.#currentChannels(),
-            channelStore.patternLength,
+            () => channelStore.activeLength,
+            () => channelStore.barLength,
           );
           this.#startRaf();
         } else {
@@ -57,7 +58,7 @@ class PlaybackStore {
       if (!this.isPlaying) return;
       const elapsed = audioEngine.currentTime - audioEngine.startAudioTime;
       if (elapsed >= 0) {
-        const raw = (elapsed / audioEngine.stepDuration) % channelStore.patternLength;
+        const raw = (elapsed / audioEngine.stepDuration) % channelStore.activeLength;
         this.currentStep = Math.floor(raw);
         this.currentStepFraction = raw;
       }
@@ -82,7 +83,8 @@ class PlaybackStore {
       audioEngine.start(
         () => this.tempo,
         () => this.#currentChannels(),
-        channelStore.patternLength,
+        () => channelStore.activeLength,
+        () => channelStore.barLength,
       );
     } else {
       this.currentStep = -1;

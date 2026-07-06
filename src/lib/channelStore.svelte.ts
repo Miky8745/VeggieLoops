@@ -84,6 +84,35 @@ class ChannelStore {
     this.#patternLength = bars * this.barLength;
   }
 
+  // The actual content-driven playback loop bound, as opposed to
+  // patternLength (the editable canvas size, grown ahead of content by
+  // PianoRoll's auto-extend effect to give the user room to keep drawing). A
+  // bar only counts toward this if *some* channel has content there — so a
+  // freshly auto-extended trailing bar that's still empty everywhere doesn't
+  // count until something is actually drawn into it. This is what lets a
+  // channel with genuinely short content (e.g. a 1-bar kick loop) keep
+  // independently looping within a longer pattern, while a channel whose
+  // content nearly fills the pattern doesn't get truncated by that same
+  // trailing headroom bar (see channelLoop.ts's channelLoopLength, which
+  // this feeds into per-channel).
+  get activeLength(): number {
+    const bar = this.barLength;
+    const bars = Math.ceil(this.#patternLength / bar);
+    let lastGloballyOccupiedBar = -1;
+    for (let b = 0; b < bars; b++) {
+      const from = b * bar;
+      const to   = Math.min(from + bar, this.#patternLength);
+      const occupied = this.channels.some(ch =>
+        ch.notes.length > 0
+          ? ch.notes.some(n => n.start < to && n.start + n.length > from)
+          : ch.steps.slice(from, to).some(Boolean)
+      );
+      if (occupied) lastGloballyOccupiedBar = b;
+    }
+    if (lastGloballyOccupiedBar === -1) return bar; // nothing anywhere yet — floor at one bar
+    return Math.min((lastGloballyOccupiedBar + 1) * bar, this.#patternLength);
+  }
+
   addChannel() {
     this.channels.push(makeChannel(nextId++));
   }

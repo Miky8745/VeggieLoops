@@ -192,7 +192,7 @@
         >
           <span class="pattern-swatch"></span>
           <span class="pattern-name">{pattern.name}</span>
-          <ScrollField bind:value={pattern.lengthBeats} min={0.25} max={999} step={0.25} decimals={2} width={40} label="beats" />
+          <ScrollField bind:value={pattern.lengthBeats} min={0.25} max={999} step={0.25} decimals={2} width={40} label="beats" tooltipKey="LENGTH" />
         </div>
       {/each}
     </div>

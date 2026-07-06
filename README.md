@@ -89,15 +89,6 @@ veggie-loops/
     └── samples/               — 1,004 LMMS audio samples
 ```
 
-## Samples
-
-The sample library (~1,004 files from LMMS) lives in `data/samples/`. To download:
-
-```bash
-cd data/samples
-bash download.sh
-```
-
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.

@@ -1,19 +1,25 @@
 <script lang="ts">
+  import DragTooltip from './DragTooltip.svelte';
+
   let {
     value        = $bindable(0),
     defaultValue = 0,
     showArc      = false,
     size         = 28,
     sensitivity  = 200,
+    tooltipKey   = '',
+    format       = (v: number) => `${Math.round(v * 100)}%`,
   }: {
     value?:        number;
     defaultValue?: number;
     showArc?:      boolean;
     size?:         number;
     sensitivity?:  number;
+    tooltipKey?:   string;
+    format?:       (value: number) => string;
   } = $props();
 
-  let dragging = false;
+  let dragging = $state(false);
 
   // 300° sweep: value=0 → 210° from top, value=1 → 510°=150° from top
   let angle = $derived(210 + value * 300);
@@ -92,6 +98,9 @@
     <div class="knob" style="width:{size}px; height:{size}px; transform: rotate({angle}deg);">
       <div class="knob-dot"></div>
     </div>
+  {/if}
+  {#if dragging && tooltipKey}
+    <DragTooltip keyLabel={tooltipKey} valueText={format(value)} />
   {/if}
 </div>
 
