@@ -94,6 +94,40 @@ fn get_data_root() -> Result<String, String> {
         .ok_or_else(|| "Non-UTF8 path".to_string())
 }
 
+// FL Studio's factory content ships many samples as a RIFF/WAVE shell whose
+// "fmt " chunk declares the proprietary format tag 0x674F ("Og") — the "data"
+// chunk in that case isn't PCM at all, it's a complete, valid Ogg Vorbis
+// stream written verbatim. No decoder (browsers' decodeAudioData included)
+// recognizes 0x674F, so such files silently fail to decode; but stripping the
+// outer WAVE shell down to just the data chunk's payload yields a plain .ogg
+// file any Vorbis decoder (incl. the browser's) opens normally.
+fn unwrap_fl_ogg_wav(bytes: Vec<u8>) -> Vec<u8> {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return bytes;
+    }
+    let mut pos: usize = 12;
+    let mut format_tag: u16 = 0;
+    let mut data_chunk: Option<(usize, usize)> = None;
+    while pos + 8 <= bytes.len() {
+        let chunk_id = &bytes[pos..pos + 4];
+        let chunk_size = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().unwrap()) as usize;
+        let payload_start = pos + 8;
+        let payload_end = payload_start.saturating_add(chunk_size).min(bytes.len());
+        if chunk_id == b"fmt " && payload_end - payload_start >= 2 {
+            format_tag = u16::from_le_bytes([bytes[payload_start], bytes[payload_start + 1]]);
+        } else if chunk_id == b"data" {
+            data_chunk = Some((payload_start, payload_end - payload_start));
+        }
+        pos = payload_start.saturating_add(chunk_size).saturating_add(chunk_size % 2);
+    }
+    if format_tag == 0x674F {
+        if let Some((start, len)) = data_chunk {
+            return bytes[start..start + len].to_vec();
+        }
+    }
+    bytes
+}
+
 #[tauri::command]
 fn read_audio_bytes(relative_path: String) -> Result<Vec<u8>, String> {
     let clean = relative_path.trim();
@@ -101,7 +135,36 @@ fn read_audio_bytes(relative_path: String) -> Result<Vec<u8>, String> {
         return Err("Path traversal not allowed".to_string());
     }
     let path = app_root()?.join("data").join(clean);
-    std::fs::read(&path).map_err(|e| e.to_string())
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    Ok(unwrap_fl_ogg_wav(bytes))
+}
+
+const AUDIO_EXTENSIONS: [&str; 4] = ["wav", "ogg", "mp3", "flac"];
+
+// Lists the immediate audio-file children of a data-relative folder (not
+// recursive) — used when a folder is dropped onto a channel to build a
+// multisample instrument from its contents.
+#[tauri::command]
+fn list_dir_files(relative_path: String) -> Result<Vec<String>, String> {
+    let clean = relative_path.trim();
+    if clean.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+    let dir = app_root()?.join("data").join(clean);
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            if !e.file_type().ok()?.is_file() {
+                return None;
+            }
+            let name = e.file_name().into_string().ok()?;
+            let ext = name.rsplit('.').next()?.to_lowercase();
+            AUDIO_EXTENSIONS.contains(&ext.as_str()).then_some(name)
+        })
+        .collect();
+    names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    Ok(names)
 }
 
 #[tauri::command]
@@ -132,6 +195,7 @@ pub fn run() {
             create_project,
             get_data_root,
             read_audio_bytes,
+            list_dir_files,
             save_project,
             load_project,
             save_history,

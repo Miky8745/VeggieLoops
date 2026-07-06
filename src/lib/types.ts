@@ -27,6 +27,7 @@ export interface Note {
 export interface ChannelData {
   id: number;
   samplePath: string | null;
+  sampleFolder: string | null; // relative path to a multisample instrument folder; mutually exclusive with samplePath
   muted: boolean;
   pan: number;
   volume: number;
@@ -34,6 +35,11 @@ export interface ChannelData {
   steps: boolean[];
   notes: Note[];
 }
+
+// Payload carried by FileExplorer's `filedrop` custom event.
+export type FileDropDetail =
+  | { kind: 'file'; path: string }
+  | { kind: 'folder'; path: string; files: string[] };
 
 export interface PatternData {
   id: number;

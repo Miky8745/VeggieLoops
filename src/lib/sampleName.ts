@@ -6,3 +6,10 @@ export function formatSampleName(path: string | null): string {
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, c => c.toUpperCase());
 }
+
+// A channel is either a single sample or a multisample folder; this picks
+// whichever is set for display (ChannelRow's drop zone, the Piano Roll's
+// header) rather than every caller re-checking both fields.
+export function formatChannelLabel(channel: { samplePath: string | null; sampleFolder: string | null }): string {
+  return formatSampleName(channel.sampleFolder ?? channel.samplePath);
+}

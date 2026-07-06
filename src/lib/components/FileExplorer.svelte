@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FileNode, FlatNode } from '$lib/types';
+  import type { FileNode, FlatNode, FileDropDetail } from '$lib/types';
 
   let {
     fileTree,
@@ -9,8 +9,9 @@
   let expandedIds = $state(new Set<string>());
   let explorerExpanded = $state(true);
 
-  let dragging = $state<{ name: string; path: string; x: number; y: number } | null>(null);
-  let pendingDrag = $state<{ name: string; path: string; startX: number; startY: number } | null>(null);
+  interface DragTarget { name: string; path: string; isDir: boolean; files: string[] }
+  let dragging = $state<(DragTarget & { x: number; y: number }) | null>(null);
+  let pendingDrag = $state<(DragTarget & { startX: number; startY: number }) | null>(null);
 
   let flatNodes = $derived(buildFlat(fileTree, 0, ''));
 
@@ -33,10 +34,17 @@
     expandedIds = next;
   }
 
-  function onFilePointerDown(e: PointerEvent, name: string, path: string) {
+  // Directory nodes are draggable (to build a multisample instrument from
+  // their contents) as well as clickable (to expand/collapse) — the 4px
+  // move threshold below is what lets both coexist on the same element,
+  // same as Playlist.svelte's pattern cards.
+  function onNodePointerDown(e: PointerEvent, node: FileNode, path: string) {
     e.preventDefault();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    pendingDrag = { name, path, startX: e.clientX, startY: e.clientY };
+    const files = node.is_dir
+      ? node.children.filter(c => !c.is_dir).map(c => `${path}/${c.name}`)
+      : [];
+    pendingDrag = { name: node.name, path, isDir: node.is_dir, files, startX: e.clientX, startY: e.clientY };
   }
 
   $effect(() => {
@@ -51,11 +59,11 @@
         const dx = e.clientX - pendingDrag.startX;
         const dy = e.clientY - pendingDrag.startY;
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-          dragging = { name: pendingDrag.name, path: pendingDrag.path, x: e.clientX, y: e.clientY };
+          dragging = { ...pendingDrag, x: e.clientX, y: e.clientY };
           pendingDrag = null;
         }
       } else if (dragging) {
-        dragging = { name: dragging.name, path: dragging.path, x: e.clientX, y: e.clientY };
+        dragging = { ...dragging, x: e.clientX, y: e.clientY };
         const target = findDrop(e.clientX, e.clientY);
         if (target !== hoveredDrop) {
           if (hoveredDrop) hoveredDrop.dispatchEvent(new CustomEvent('filedragleave'));
@@ -67,7 +75,10 @@
 
     function onUp(e: PointerEvent) {
       if (dragging && hoveredDrop) {
-        hoveredDrop.dispatchEvent(new CustomEvent('filedrop', { detail: dragging.path }));
+        const detail: FileDropDetail = dragging.isDir
+          ? { kind: 'folder', path: dragging.path, files: dragging.files }
+          : { kind: 'file', path: dragging.path };
+        hoveredDrop.dispatchEvent(new CustomEvent('filedrop', { detail }));
       }
       if (hoveredDrop) {
         hoveredDrop.dispatchEvent(new CustomEvent('filedragleave'));
@@ -126,9 +137,10 @@
           {#each flatNodes as flat (flat.id)}
             {#if flat.node.is_dir}
               <button
-                class="tree-item"
+                class="tree-item tree-item--dir"
                 style="padding-left: {10 + flat.depth * 16}px"
                 onclick={() => toggleDir(flat.id)}
+                onpointerdown={(e) => onNodePointerDown(e, flat.node, flat.id.slice(1))}
                 role="treeitem"
                 aria-selected={false}
                 aria-expanded={flat.expanded}
@@ -159,7 +171,7 @@
                 role="treeitem"
                 aria-selected={false}
                 tabindex="0"
-                onpointerdown={(e) => onFilePointerDown(e, flat.node.name, flat.id.slice(1))}
+                onpointerdown={(e) => onNodePointerDown(e, flat.node, flat.id.slice(1))}
               >
                 <svg class="item-icon item-icon--file" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M2 1.5h6l3 3v7.5H2V1.5z"/>
@@ -182,9 +194,13 @@
     style="left:{dragging.x + 12}px; top:{dragging.y - 10}px"
     aria-hidden="true"
   >
-    <svg class="ghost-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M2 1.5h6l3 3v7.5H2V1.5z"/>
-      <path d="M8 1.5V4.5H11"/>
+    <svg class="ghost-icon" width="13" height="13" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+      {#if dragging.isDir}
+        <path d="M1 4.5h5l1.5 1.5H14v7H1V4.5z"/>
+      {:else}
+        <path d="M2 1.5h6l3 3v7.5H2V1.5z"/>
+        <path d="M8 1.5V4.5H11"/>
+      {/if}
     </svg>
     <span>{dragging.name}</span>
   </div>

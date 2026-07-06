@@ -330,7 +330,17 @@
         activeStep={playback.currentStep}
         onSelect={(e) => handleSelect(i, e)}
         onStepChange={(step, active) => { channelStore.channels[i].steps[step] = active; }}
-        onSampleDrop={(name) => { channelStore.channels[i].samplePath = name; audioEngine.loadSample(name); }}
+        onSampleDrop={(drop) => {
+          const target = channelStore.channels[i];
+          if (drop.kind === 'file') {
+            target.samplePath = drop.path;
+            target.sampleFolder = null;
+            audioEngine.loadSample(drop.path);
+          } else {
+            target.sampleFolder = drop.path;
+            target.samplePath = null;
+          }
+        }}
         onOpenPianoRoll={() => onOpenPianoRoll(ch.id)}
       />
     {/each}

@@ -6,6 +6,7 @@ function makeChannel(id: number): ChannelData {
   return {
     id,
     samplePath: null,
+    sampleFolder: null,
     muted: false,
     pan: 0.5,
     volume: 0.8,
@@ -23,6 +24,7 @@ interface PatternContent {
 export interface ChannelSettingsExport {
   id: number;
   samplePath: string | null;
+  sampleFolder: string | null;
   muted: boolean;
   pan: number;
   volume: number;
@@ -124,7 +126,7 @@ class ChannelStore {
     }
     return {
       channels: this.channels.map(c => ({
-        id: c.id, samplePath: c.samplePath, muted: c.muted,
+        id: c.id, samplePath: c.samplePath, sampleFolder: c.sampleFolder, muted: c.muted,
         pan: c.pan, volume: c.volume, mixerTrack: c.mixerTrack,
       })),
       content,
@@ -152,7 +154,7 @@ class ChannelStore {
     this.channels = data.channels.map(c => {
       const live = liveByChannel.get(c.id);
       return {
-        id: c.id, samplePath: c.samplePath, muted: c.muted,
+        id: c.id, samplePath: c.samplePath, sampleFolder: c.sampleFolder ?? null, muted: c.muted,
         pan: c.pan, volume: c.volume, mixerTrack: c.mixerTrack,
         steps: live ? live.steps : (Array(16).fill(false) as boolean[]),
         notes: live ? live.notes : [],

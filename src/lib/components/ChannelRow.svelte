@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { ChannelData } from '$lib/types';
+  import type { ChannelData, FileDropDetail } from '$lib/types';
   import Dial from './Dial.svelte';
   import ScrollField from './ScrollField.svelte';
-  import { formatSampleName } from '$lib/sampleName';
+  import { formatChannelLabel } from '$lib/sampleName';
   import { channelStore } from '$lib/channelStore.svelte';
   import MiniNoteRoll from './pianoroll/MiniNoteRoll.svelte';
 
@@ -22,7 +22,7 @@
     activeStep?:  number;
     onSelect:     (e: MouseEvent) => void;
     onStepChange: (step: number, active: boolean) => void;
-    onSampleDrop: (name: string) => void;
+    onSampleDrop: (drop: FileDropDetail) => void;
     onOpenPianoRoll: () => void;
   } = $props();
 
@@ -39,7 +39,7 @@
     function onLeave() { dragOver = false; }
     function onDrop(e: Event) {
       dragOver = false;
-      onSampleDrop((e as CustomEvent<string>).detail);
+      onSampleDrop((e as CustomEvent<FileDropDetail>).detail);
     }
     el.addEventListener('filedragenter', onEnter);
     el.addEventListener('filedragleave', onLeave);
@@ -51,8 +51,8 @@
     };
   });
 
-  let sampleLabel = $derived(formatSampleName(channel.samplePath));
-  let isEmpty = $derived(channel.samplePath === null);
+  let sampleLabel = $derived(formatChannelLabel(channel));
+  let isEmpty = $derived(channel.samplePath === null && channel.sampleFolder === null);
 
   // Sequencer paint
   let painting = $state<boolean | null>(null); // true=activate, false=deactivate

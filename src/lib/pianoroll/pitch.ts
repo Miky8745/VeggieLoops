@@ -51,3 +51,30 @@ export function patternWidth(patternLength: number): number {
 export function clampPitch(pitch: number): number {
   return Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
 }
+
+const NOTE_BASE: Record<string, number> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+
+// Matches a trailing note-name token like "C1", "G#3", "A_2" (some FL packs
+// use "_" instead of "#" to keep sharps filesystem-safe). Requires the digit
+// group to sit directly against the letter/accidental — this is what keeps
+// it from firing on ordinary words (e.g. "Piano", "Ibanez").
+const NOTE_TOKEN = /([A-Ga-g])(#|_)?(-?\d{1,2})(?![A-Za-z0-9])/g;
+
+// Recovers the recorded pitch from an FL Studio sample filename, e.g.
+// "01_TSAX_LONG G#1ogg.wav" -> pitch for G#1. Many FL packs concatenate the
+// original ".ogg" extension's letters onto the note name when re-saved as
+// ".wav" (no separating dot), so that noise is stripped first. Returns null
+// when no note token is found — such files are round-robin/one-shot samples
+// with no pitch of their own (see multisample.ts).
+export function parseNoteName(filename: string): number | null {
+  const stem = filename.replace(/\.[^.]+$/, '').replace(/ogg$/i, '');
+  let match: RegExpExecArray | null;
+  let last: RegExpExecArray | null = null;
+  NOTE_TOKEN.lastIndex = 0;
+  while ((match = NOTE_TOKEN.exec(stem)) !== null) last = match;
+  if (!last) return null;
+  const base = NOTE_BASE[last[1].toLowerCase()];
+  const accidental = last[2] ? 1 : 0;
+  const octave = parseInt(last[3], 10);
+  return clampPitch(octave * 12 + base + accidental);
+}

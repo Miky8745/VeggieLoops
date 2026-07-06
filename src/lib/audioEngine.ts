@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ChannelData } from '$lib/types';
+import { buildMultisample, pickFromFolder, type MultisampleFolder } from '$lib/multisample';
 
 const LOOKAHEAD = 0.1;  // seconds to schedule ahead
 const INTERVAL  = 25;   // ms between scheduler ticks
@@ -18,6 +19,11 @@ class AudioEngine {
   // Deduplicates concurrent loads: multiple ticks requesting the same
   // uncached path share one IPC call instead of firing N in parallel.
   private loadingPromises = new Map<string, Promise<AudioBuffer | null>>();
+  // Same dedup shape as bufferCache/loadingPromises above, but for a folder's
+  // file listing (used to build a channel's multisample map the first time
+  // it's played from).
+  private folderCache   = new Map<string, MultisampleFolder>();
+  private folderLoadingPromises = new Map<string, Promise<MultisampleFolder | null>>();
 
   // Read by the rAF loop in ChannelRack for visual sync
   startAudioTime = 0;
@@ -61,6 +67,53 @@ class AudioEngine {
     return p;
   }
 
+  private async resolveFolder(folderPath: string): Promise<MultisampleFolder | null> {
+    if (this.folderCache.has(folderPath)) return this.folderCache.get(folderPath)!;
+    if (this.folderLoadingPromises.has(folderPath)) return this.folderLoadingPromises.get(folderPath)!;
+    const p = (async () => {
+      try {
+        const names = await invoke<string[]>('list_dir_files', { relativePath: folderPath });
+        const resolved = buildMultisample(names, folderPath);
+        this.folderCache.set(folderPath, resolved);
+        return resolved;
+      } catch {
+        return null;
+      } finally {
+        this.folderLoadingPromises.delete(folderPath);
+      }
+    })();
+    this.folderLoadingPromises.set(folderPath, p);
+    return p;
+  }
+
+  // Schedules one hit for a channel at targetPitch (a note's own pitch, or
+  // 60 for a plain step-sequencer trigger) — resolves either a single sample
+  // (rate relative to middle C, as always) or a multisample folder (rate
+  // relative to whichever recorded sample is nearest targetPitch).
+  private triggerPitched(ch: ChannelData, targetPitch: number, vol: number, pan: number, playTime: number) {
+    if (ch.sampleFolder) {
+      const folderPath = ch.sampleFolder;
+      this.resolveFolder(folderPath).then(folder => {
+        const picked = folder && pickFromFolder(folder, targetPitch);
+        if (picked) this.scheduleHit(picked.path, picked.rate, vol, pan, playTime);
+      });
+    } else if (ch.samplePath) {
+      const rate = 2 ** ((targetPitch - 60) / 12);
+      this.scheduleHit(ch.samplePath, rate, vol, pan, playTime);
+    }
+  }
+
+  private scheduleHit(path: string, rate: number, vol: number, pan: number, playTime: number) {
+    this.loadSample(path).then(buf => {
+      if (!buf || !this.ctx) return;
+      // If the load resolved more than 50ms after the beat, skip it —
+      // playing a stale beat causes a pile-up of out-of-time hits.
+      // Within 50ms, clamp to now so the gain schedule stays valid.
+      if (this.ctx.currentTime - playTime > 0.05) return;
+      this.playSample(buf, vol, pan, Math.max(playTime, this.ctx.currentTime + RAMP), rate);
+    });
+  }
+
   private playSample(buf: AudioBuffer, volume: number, pan: number, time: number, playbackRate = 1) {
     if (!this.ctx || !this.masterOut) return;
     const src  = this.ctx.createBufferSource();
@@ -95,9 +148,8 @@ class AudioEngine {
       const playTime = this.nextStepTime;
 
       for (const ch of this.getChannels()) {
-        if (ch.muted || !ch.samplePath) continue;
-        const path = ch.samplePath;
-        const pan  = ch.pan;
+        if (ch.muted || (!ch.samplePath && !ch.sampleFolder)) continue;
+        const pan = ch.pan;
 
         // A channel with any piano-roll notes plays purely from note data
         // (pitched, velocity-scaled); otherwise it falls back to the plain
@@ -105,24 +157,10 @@ class AudioEngine {
         if (ch.notes.length > 0) {
           for (const note of ch.notes) {
             if (note.start !== step) continue;
-            const rate = 2 ** ((note.pitch - 60) / 12);
-            const vol  = ch.volume * note.velocity;
-            this.loadSample(path).then(buf => {
-              if (!buf || !this.ctx) return;
-              if (this.ctx.currentTime - playTime > 0.05) return;
-              this.playSample(buf, vol, pan, Math.max(playTime, this.ctx.currentTime + RAMP), rate);
-            });
+            this.triggerPitched(ch, note.pitch, ch.volume * note.velocity, pan, playTime);
           }
         } else if (ch.steps[step]) {
-          const vol = ch.volume;
-          this.loadSample(path).then(buf => {
-            if (!buf || !this.ctx) return;
-            // If the load resolved more than 50ms after the beat, skip it —
-            // playing a stale beat causes a pile-up of out-of-time hits.
-            // Within 50ms, clamp to now so the gain schedule stays valid.
-            if (this.ctx.currentTime - playTime > 0.05) return;
-            this.playSample(buf, vol, pan, Math.max(playTime, this.ctx.currentTime + RAMP));
-          });
+          this.triggerPitched(ch, 60, ch.volume, pan, playTime);
         }
       }
 

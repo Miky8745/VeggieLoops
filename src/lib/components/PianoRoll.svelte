@@ -1,7 +1,7 @@
 <script lang="ts">
   import { channelStore } from '$lib/channelStore.svelte';
   import { playback } from '$lib/playbackStore.svelte';
-  import { formatSampleName } from '$lib/sampleName';
+  import { formatChannelLabel } from '$lib/sampleName';
   import { KEY_COL_W, RULER_H, LANE_H } from '$lib/pianoroll/pitch';
   import FloatingWindow, { type WorkspaceBounds } from './FloatingWindow.svelte';
   import PianoRollHeader from './pianoroll/PianoRollHeader.svelte';
@@ -25,7 +25,7 @@
   let noteGridRef: NoteGrid | undefined = $state();
 
   let channel = $derived(channelStore.selectedChannel);
-  let channelName = $derived(channel ? formatSampleName(channel.samplePath) : 'No channel');
+  let channelName = $derived(channel ? formatChannelLabel(channel) : 'No channel');
 
   // Selection is per-channel edit state — clear it when the focused channel changes.
   $effect(() => {

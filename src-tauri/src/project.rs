@@ -18,6 +18,8 @@ fn validate_project_name(name: &str) -> Result<&str, String> {
 pub struct ChannelSettings {
     pub id: u32,
     pub sample_path: Option<String>,
+    #[serde(default)]
+    pub sample_folder: Option<String>,
     pub muted: bool,
     pub pan: f64,
     pub volume: f64,
