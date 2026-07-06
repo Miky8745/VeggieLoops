@@ -12,7 +12,7 @@ interface HistoryFile {
 class HistoryStore {
   past = $state<ProjectFileData[]>([]);
   future = $state<ProjectFileData[]>([]);
-  autosaveEnabled = $state(false);
+  autosaveEnabled = $state(true);
   projectName = $state('');
 
   #lastSnap: ProjectFileData | null = null;
