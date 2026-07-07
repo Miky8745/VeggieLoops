@@ -56,11 +56,10 @@ class PlaybackStore {
   #startRaf() {
     const frame = () => {
       if (!this.isPlaying) return;
-      const elapsed = audioEngine.currentTime - audioEngine.startAudioTime;
-      if (elapsed >= 0) {
-        const raw = (elapsed / audioEngine.stepDuration) % channelStore.activeLength;
-        this.currentStep = Math.floor(raw);
-        this.currentStepFraction = raw;
+      const { step, fraction } = audioEngine.getPosition();
+      if (step >= 0) {
+        this.currentStep = step;
+        this.currentStepFraction = fraction;
       }
       this.#rafId = requestAnimationFrame(frame);
     };

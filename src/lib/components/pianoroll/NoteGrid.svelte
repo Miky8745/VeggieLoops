@@ -378,6 +378,7 @@
   .grid-viewport {
     height: 100%;
     overflow: auto;
+    overflow-anchor: none;
     position: relative;
     background: #141414;
   }

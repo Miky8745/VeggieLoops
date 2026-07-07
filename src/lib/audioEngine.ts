@@ -35,9 +35,13 @@ class AudioEngine {
   private folderCache   = new Map<string, MultisampleFolder>();
   private folderLoadingPromises = new Map<string, Promise<MultisampleFolder | null>>();
 
-  // Read by the rAF loop in ChannelRack for visual sync
-  startAudioTime = 0;
   stepDuration   = 0.5; // always kept current in tick()
+  // Audio-context time the current loop cycle began. Advanced forward by
+  // exactly one cycle each time real time crosses one (see getPosition())
+  // rather than staying fixed at playback start, so a growing activeLength
+  // (e.g. auto-extending the pattern while drawing notes) can't retroactively
+  // change where "elapsed time so far" lands under a new, larger divisor.
+  private loopAnchorTime = 0;
 
   private async ensureCtx(): Promise<AudioContext> {
     if (!this.ctx) {
@@ -180,7 +184,7 @@ class AudioEngine {
     const lookAhead = this.ctx.currentTime + LOOKAHEAD;
 
     while (this.nextStepTime < lookAhead) {
-      const step     = this.scheduledStep % activeLength;
+      const step     = this.scheduledStep;
       const playTime = this.nextStepTime;
 
       for (const ch of this.getChannels()) {
@@ -208,11 +212,34 @@ class AudioEngine {
         }
       }
 
-      this.scheduledStep++;
+      // Wrapped immediately rather than left to grow unbounded, so
+      // scheduledStep always stays inside [0, activeLength) — the same
+      // reasoning as loopAnchorTime above.
+      this.scheduledStep = (this.scheduledStep + 1) % activeLength;
       this.nextStepTime += 60 / bpm / 4;
     }
 
     this.timerId = setTimeout(() => this.tick(), INTERVAL);
+  }
+
+  // Where playback is right now, for the rAF loop driving the visual
+  // playhead. Mirrors tick()'s scheduling math but derived from real
+  // elapsed time (what's audibly playing) rather than the lookahead-scheduled
+  // step. Advances loopAnchorTime forward a full cycle at a time instead of
+  // computing (elapsed % activeLength) directly off an ever-growing elapsed
+  // value, which would jump whenever activeLength changes mid-loop.
+  getPosition(): { step: number; fraction: number } {
+    if (!this.ctx) return { step: -1, fraction: 0 };
+    let elapsed = this.ctx.currentTime - this.loopAnchorTime;
+    if (elapsed < 0) return { step: -1, fraction: 0 };
+    let activeLength = this.getActiveLength();
+    while (elapsed >= activeLength * this.stepDuration) {
+      this.loopAnchorTime += activeLength * this.stepDuration;
+      elapsed = this.ctx.currentTime - this.loopAnchorTime;
+      activeLength = this.getActiveLength();
+    }
+    const raw = elapsed / this.stepDuration;
+    return { step: Math.floor(raw), fraction: raw };
   }
 
   async start(
@@ -229,7 +256,7 @@ class AudioEngine {
     this.scheduledStep   = 0;
     this.stepDuration  = 60 / getBpm() / 4;
     this.nextStepTime  = ctx.currentTime + 0.05;
-    this.startAudioTime = this.nextStepTime;
+    this.loopAnchorTime = this.nextStepTime;
     this.tick();
   }
 
