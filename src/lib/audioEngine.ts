@@ -134,7 +134,10 @@ class AudioEngine {
     src.buffer = buf;
     src.playbackRate.value = playbackRate;
     const gain = this.ctx.createGain();
-    const vol  = Math.max(0, Math.min(1, volume));
+    // Channel volume now goes up to 200% (see ChannelRow's Volume dial) —
+    // clamped to 2 rather than 1, with the master compressor guarding
+    // against clipping when a boosted channel is at or near full velocity.
+    const vol  = Math.max(0, Math.min(2, volume));
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = pan * 2 - 1; // 0..1 → -1..1
     src.connect(gain).connect(panner).connect(this.masterOut);

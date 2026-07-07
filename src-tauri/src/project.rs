@@ -1,3 +1,4 @@
+use quick_xml::se::Serializer;
 use serde::{Deserialize, Serialize};
 
 use crate::projects_root;
@@ -109,8 +110,11 @@ pub struct ProjectFile {
 pub fn save_project(name: String, project: ProjectFile) -> Result<(), String> {
     let clean = validate_project_name(&name)?;
     let path = projects_root()?.join(clean).join(format!("{}.vlp", clean));
-    let body = quick_xml::se::to_string(&project).map_err(|e| e.to_string())?;
-    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}", body);
+    let mut body = String::new();
+    let mut ser = Serializer::new(&mut body);
+    ser.indent(' ', 2);
+    project.serialize(ser).map_err(|e| e.to_string())?;
+    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}\n", body);
     std::fs::write(&path, xml).map_err(|e| e.to_string())
 }
 

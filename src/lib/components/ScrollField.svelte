@@ -54,17 +54,19 @@
   function onMouseup() {
     dragging = false;
   }
+
+  let wrapEl = $state<HTMLElement | null>(null);
 </script>
 
 <svelte:window onmousemove={onMousemove} onmouseup={onMouseup} />
 
-<div class="sf-wrap" style="width:{width}px;" onwheel={onWheel} onmousedown={onMousedown} role="spinbutton" aria-valuenow={value} aria-valuemin={min} aria-valuemax={max} tabindex="0">
+<div class="sf-wrap" bind:this={wrapEl} style="width:{width}px;" onwheel={onWheel} onmousedown={onMousedown} role="spinbutton" aria-valuenow={value} aria-valuemin={min} aria-valuemax={max} tabindex="0">
   <span class="sf-val">{display}</span>
   {#if label}
     <span class="sf-label">{label}</span>
   {/if}
-  {#if dragging && tooltipKey}
-    <DragTooltip keyLabel={tooltipKey} valueText={label ? `${display} ${label}` : display} />
+  {#if dragging && tooltipKey && wrapEl}
+    <DragTooltip keyLabel={tooltipKey} valueText={label ? `${display} ${label}` : display} anchorEl={wrapEl} />
   {/if}
 </div>
 

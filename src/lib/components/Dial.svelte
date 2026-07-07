@@ -4,25 +4,34 @@
   let {
     value        = $bindable(0),
     defaultValue = 0,
+    max          = 1,
     showArc      = false,
     size         = 28,
     sensitivity  = 200,
+    // 300° sweep starting at 210° (lower-left) by default — the classic
+    // full-travel rotary-pot look, gap centered at the bottom. A dial that
+    // wants its max to land on the right instead (e.g. Volume, see
+    // ChannelRow) overrides these to sweep left→top→right instead.
+    sweepStart   = 210,
+    sweepDegrees = 300,
     tooltipKey   = '',
     format       = (v: number) => `${Math.round(v * 100)}%`,
   }: {
     value?:        number;
     defaultValue?: number;
+    max?:          number;
     showArc?:      boolean;
     size?:         number;
     sensitivity?:  number;
+    sweepStart?:   number;
+    sweepDegrees?: number;
     tooltipKey?:   string;
     format?:       (value: number) => string;
   } = $props();
 
   let dragging = $state(false);
 
-  // 300° sweep: value=0 → 210° from top, value=1 → 510°=150° from top
-  let angle = $derived(210 + value * 300);
+  let angle = $derived(sweepStart + (value / max) * sweepDegrees);
 
   // SVG canvas: 32×32, radius 12, center (16,16)
   const CX = 16, CY = 16, R = 12;
@@ -32,18 +41,19 @@
     return { x: CX + R * Math.cos(rad), y: CY + R * Math.sin(rad) };
   }
 
-  // Static background arc path (210° → 150° clockwise = 300°)
-  const bgPath = (() => {
-    const s = pt(210), e = pt(510);
-    return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${R} ${R} 0 1 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
-  })();
+  // Background arc path spanning the full sweep
+  let bgPath = $derived.by(() => {
+    const s = pt(sweepStart), e = pt(sweepStart + sweepDegrees);
+    const large = sweepDegrees > 180 ? 1 : 0;
+    return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+  });
 
   // Reactive fill arc path
   let fillPath = $derived.by(() => {
     if (value <= 0) return '';
-    const s = pt(210);
-    const sweep = value * 300;
-    const e = pt(210 + sweep);
+    const s = pt(sweepStart);
+    const sweep = (value / max) * sweepDegrees;
+    const e = pt(sweepStart + sweep);
     const large = sweep > 180 ? 1 : 0;
     return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
   });
@@ -60,7 +70,10 @@
 
   function onMousemove(e: MouseEvent) {
     if (!dragging) return;
-    value = Math.max(0, Math.min(1, value - e.movementY / sensitivity));
+    // sensitivity is "pixels to sweep the full range", so the delta is
+    // scaled by max — otherwise a wider range (e.g. Volume's 0-2) would
+    // whip past in half the drag distance of a 0-1 dial.
+    value = Math.max(0, Math.min(max, value - (e.movementY / sensitivity) * max));
   }
 
   function onMouseup() {
@@ -71,19 +84,22 @@
     e.stopPropagation();
     value = defaultValue;
   }
+
+  let wrapEl = $state<HTMLElement | null>(null);
 </script>
 
 <svelte:window onmousemove={onMousemove} onmouseup={onMouseup} />
 
 <div
   class="dial-wrap"
+  bind:this={wrapEl}
   style="width:{size}px; height:{size}px;"
   onmousedown={onMousedown}
   ondblclick={onDblclick}
   role="slider"
   aria-valuenow={value}
   aria-valuemin={0}
-  aria-valuemax={1}
+  aria-valuemax={max}
   tabindex="0"
 >
   {#if showArc}
@@ -99,8 +115,8 @@
       <div class="knob-dot"></div>
     </div>
   {/if}
-  {#if dragging && tooltipKey}
-    <DragTooltip keyLabel={tooltipKey} valueText={format(value)} />
+  {#if dragging && tooltipKey && wrapEl}
+    <DragTooltip keyLabel={tooltipKey} valueText={format(value)} anchorEl={wrapEl} />
   {/if}
 </div>
 

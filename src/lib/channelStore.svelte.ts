@@ -183,7 +183,12 @@ class ChannelStore {
     this.channels = data.channels.map(c => {
       const live = liveByChannel.get(c.id);
       return {
-        id: c.id, samplePath: c.samplePath, sampleFolder: c.sampleFolder ?? null, muted: c.muted,
+        // quick-xml round-trips an Option::None field as an empty tag,
+        // which deserializes back as "" rather than null/undefined — `||`
+        // (not `??`) normalizes that back to null so formatChannelLabel's
+        // `sampleFolder ?? samplePath` fallback isn't defeated by a
+        // leftover empty string from whichever field wasn't set.
+        id: c.id, samplePath: c.samplePath || null, sampleFolder: c.sampleFolder || null, muted: c.muted,
         pan: c.pan, volume: c.volume, mixerTrack: c.mixerTrack,
         steps: live ? live.steps : (Array(16).fill(false) as boolean[]),
         notes: live ? live.notes : [],

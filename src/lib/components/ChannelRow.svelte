@@ -116,8 +116,18 @@
   <!-- Pan dial -->
   <Dial bind:value={channel.pan} defaultValue={0.5} size={24} sensitivity={150} tooltipKey="PAN" format={formatPan} />
 
-  <!-- Volume dial -->
-  <Dial bind:value={channel.volume} defaultValue={0.8} size={24} sensitivity={150} tooltipKey="VOLUME" />
+  <!-- Volume dial: 0-200% (100%/unity gain sits at the top), half-circle
+       sweeping left→top→right so max lands on the right, not the bottom. -->
+  <Dial
+    bind:value={channel.volume}
+    defaultValue={0.8}
+    max={2}
+    sweepStart={270}
+    sweepDegrees={180}
+    size={24}
+    sensitivity={150}
+    tooltipKey="VOLUME"
+  />
 
   <!-- Mixer track -->
   <ScrollField bind:value={channel.mixerTrack} min={0} max={125} width={30} tooltipKey="MIXER TRACK" />
