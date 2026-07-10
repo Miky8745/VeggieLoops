@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { scale } from 'svelte/transition';
   import type { ChannelData, Note } from '$lib/types';
   import {
     MIN_PITCH, MAX_PITCH, KEY_H, STEP_W, GRID_TOTAL_H, DEFAULT_CENTER_PITCH,
-    patternWidth, stepToX, pitchToY, xToStep, yToPitch, clampPitch, isBlackKey, isCNote,
+    patternWidth, stepToX, pitchToY, xToStep, xToStepFree, yToPitch, clampPitch, isBlackKey, isCNote, pitchName,
   } from '$lib/pianoroll/pitch';
+  import { audioEngine } from '$lib/audioEngine';
 
   let {
     channel,
@@ -15,6 +17,7 @@
     currentStepFraction = -1,
     onScroll,
     onViewportResize,
+    onDragPitchesChange,
   }: {
     channel: ChannelData;
     tool: 'draw' | 'select';
@@ -24,6 +27,7 @@
     currentStepFraction?: number;
     onScroll: (scrollLeft: number, scrollTop: number) => void;
     onViewportResize?: (width: number) => void;
+    onDragPitchesChange?: (pitches: Set<number>) => void;
   } = $props();
 
   const pitches = Array.from({ length: MAX_PITCH - MIN_PITCH + 1 }, (_, i) => MAX_PITCH - i);
@@ -36,6 +40,15 @@
     for (const n of channel.notes) if (n.id >= nextNoteId) nextNoteId = n.id + 1;
   });
 
+  const DEFAULT_NOTE_LENGTH = 8; // 2 beats × 4 steps/beat — default length before any note has been clicked
+  const MIN_FREE_LENGTH = 0.05;  // steps — floor for Shift-free resize so length never hits 0/negative
+
+  // Remembers the last note created/clicked/moved/resized, so the next
+  // newly-placed note reuses its length. Plain bookkeeping (same category as
+  // nextNoteId/clipboard below) — never read from a template, so it doesn't
+  // need to be $state.
+  let lastLength = DEFAULT_NOTE_LENGTH;
+
   function localPos(e: MouseEvent | PointerEvent): { x: number; y: number } {
     const rect = contentEl!.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -45,8 +58,8 @@
     return channel.notes.find(n => n.pitch === pitch && step >= n.start && step < n.start + n.length);
   }
 
-  function createNote(step: number, pitch: number): Note {
-    const note: Note = { id: nextNoteId++, pitch, start: step, length: 1, velocity: 0.8 };
+  function createNote(step: number, pitch: number, length: number): Note {
+    const note: Note = { id: nextNoteId++, pitch, start: step, length, velocity: 0.8 };
     channel.notes.push(note);
     return note;
   }
@@ -62,85 +75,114 @@
   }
 
   // ── Draw tool ─────────────────────────────────────────────────────
+  // Classic click-to-place model: a click on empty space places one note of
+  // lastLength; dragging right from that same click resizes just that note's
+  // length, locked to the row it was created on (vertical pointer movement is
+  // never read during create/resize — there is no "paint across rows" mode).
   type DrawDrag =
-    | { mode: 'resize-new';      noteId: number }
-    | { mode: 'resize-existing'; noteId: number; anchorStep: number; origLength: number }
-    | { mode: 'move';            noteId: number; pointerStep: number; pointerPitch: number; origStart: number; origPitch: number }
-    | { mode: 'paint';           lastCell: string | null };
+    | { mode: 'create';          noteId: number; anchorStepSnapped: number; anchorStepFree: number; anchorPitch: number }
+    | { mode: 'resize-existing'; noteId: number; anchorStepSnapped: number; anchorStepFree: number; origLength: number }
+    | { mode: 'move';            noteId: number; anchorStepSnapped: number; anchorStepFree: number; anchorPitch: number;
+        origStart: number; origPitch: number; lastPreviewPitch: number };
 
-  let drawDrag: DrawDrag | null = null;
+  // $state (not a plain let) so the highlightPitches derivation below can
+  // react to the live drag.
+  let drawDrag = $state<DrawDrag | null>(null);
 
   function drawMousedown(e: MouseEvent) {
     if (e.button !== 0) return;
     const { x, y } = localPos(e);
-    const step = xToStep(x);
+    const stepSnapped = xToStep(x);
+    const stepFree = xToStepFree(x);
     const pitch = yToPitch(y);
-    if (step >= patternLength) return;
+    if (stepSnapped >= patternLength) return;
 
-    const existing = noteAt(step, pitch);
+    const existing = noteAt(stepSnapped, pitch);
     if (existing) {
+      audioEngine.previewNote(channel, existing.pitch);
       const rightEdge = stepToX(existing.start + existing.length);
       if (x >= rightEdge - 6) {
-        drawDrag = { mode: 'resize-existing', noteId: existing.id, anchorStep: step, origLength: existing.length };
+        drawDrag = {
+          mode: 'resize-existing', noteId: existing.id,
+          anchorStepSnapped: stepSnapped, anchorStepFree: stepFree, origLength: existing.length,
+        };
       } else {
-        drawDrag = { mode: 'move', noteId: existing.id, pointerStep: step, pointerPitch: pitch, origStart: existing.start, origPitch: existing.pitch };
+        lastLength = existing.length; // clicking/selecting an existing note updates the remembered length
+        drawDrag = {
+          mode: 'move', noteId: existing.id,
+          anchorStepSnapped: stepSnapped, anchorStepFree: stepFree, anchorPitch: pitch,
+          origStart: existing.start, origPitch: existing.pitch, lastPreviewPitch: pitch,
+        };
       }
       return;
     }
 
-    const note = createNote(step, pitch);
-    drawDrag = { mode: 'resize-new', noteId: note.id };
+    const len = Math.max(1, Math.min(patternLength - stepSnapped, lastLength));
+    const note = createNote(stepSnapped, pitch, len);
+    audioEngine.previewNote(channel, pitch);
+    drawDrag = {
+      mode: 'create', noteId: note.id,
+      anchorStepSnapped: stepSnapped, anchorStepFree: stepFree, anchorPitch: pitch,
+    };
   }
 
   function drawPointermove(e: PointerEvent) {
     if (!drawDrag) return;
-    if (e.buttons === 0) { drawDrag = null; return; }
+    if (e.buttons === 0) { commitDrawDrag(); return; }
     const { x, y } = localPos(e);
-    const step = xToStep(x);
-    const pitch = yToPitch(y);
+    const free = e.shiftKey;
+    const current = free ? xToStepFree(x) : xToStep(x);
+    const minLen = free ? MIN_FREE_LENGTH : 1;
 
-    if (drawDrag.mode === 'resize-new') {
-      const noteId = drawDrag.noteId;
-      const note = channel.notes.find(n => n.id === noteId);
+    if (drawDrag.mode === 'create' || drawDrag.mode === 'resize-existing') {
+      const note = channel.notes.find(n => n.id === drawDrag!.noteId);
       if (!note) return;
-      if (pitch !== note.pitch) {
-        // dragged into a different row before resizing — switch to painting
-        // 1-step notes across whichever cells the pointer enters next
-        if (!noteAt(step, pitch)) createNote(step, pitch);
-        drawDrag = { mode: 'paint', lastCell: `${step},${pitch}` };
-        return;
+      const anchor = free ? drawDrag.anchorStepFree : drawDrag.anchorStepSnapped;
+      if (drawDrag.mode === 'create') {
+        note.length = Math.max(minLen, Math.min(patternLength - note.start, current - anchor + 1));
+      } else {
+        note.length = Math.max(minLen, Math.min(patternLength - note.start, drawDrag.origLength + (current - anchor)));
       }
-      note.length = Math.max(1, Math.min(patternLength - note.start, step - note.start + 1));
-    } else if (drawDrag.mode === 'resize-existing') {
-      const noteId = drawDrag.noteId;
-      const note = channel.notes.find(n => n.id === noteId);
-      if (!note) return;
-      note.length = Math.max(1, Math.min(patternLength - note.start, drawDrag.origLength + (step - drawDrag.anchorStep)));
+      // pitch/y intentionally never read here — length-only, row locked to
+      // the pitch the note was created/clicked on regardless of vertical
+      // pointer movement.
     } else if (drawDrag.mode === 'move') {
-      const noteId = drawDrag.noteId;
-      const note = channel.notes.find(n => n.id === noteId);
+      const note = channel.notes.find(n => n.id === drawDrag!.noteId);
       if (!note) return;
-      const deltaStep = step - drawDrag.pointerStep;
-      const deltaPitch = pitch - drawDrag.pointerPitch;
-      note.start = Math.max(0, Math.min(patternLength - note.length, drawDrag.origStart + deltaStep));
-      note.pitch = clampPitch(drawDrag.origPitch + deltaPitch);
-    } else if (drawDrag.mode === 'paint') {
-      const cellKey = `${step},${pitch}`;
-      if (cellKey !== drawDrag.lastCell) {
-        if (!noteAt(step, pitch)) createNote(step, pitch);
-        drawDrag = { mode: 'paint', lastCell: cellKey };
+      const anchor = free ? drawDrag.anchorStepFree : drawDrag.anchorStepSnapped;
+      const pitch = yToPitch(y); // Y always snapped — Shift only frees the X axis
+      note.start = Math.max(0, Math.min(patternLength - note.length, drawDrag.origStart + (current - anchor)));
+      note.pitch = clampPitch(drawDrag.origPitch + (pitch - drawDrag.anchorPitch));
+      if (pitch !== drawDrag.lastPreviewPitch) {
+        audioEngine.previewNote(channel, note.pitch);
+        drawDrag.lastPreviewPitch = pitch;
       }
     }
   }
 
-  function drawPointerup() { drawDrag = null; }
+  function commitDrawDrag() {
+    if (drawDrag) {
+      const note = channel.notes.find(n => n.id === drawDrag!.noteId);
+      if (note) lastLength = note.length;
+    }
+    drawDrag = null;
+  }
+
+  function drawPointerup() { commitDrawDrag(); }
 
   // ── Select tool ───────────────────────────────────────────────────
   let marquee = $state<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   let marqueeMode: 'replace' | 'add' | 'toggle' = 'replace';
 
-  type MoveDrag = { pointerStep: number; pointerPitch: number; origins: Map<number, { start: number; pitch: number }> };
-  let moveDrag: MoveDrag | null = null;
+  type MoveDrag = {
+    pointerStepSnapped: number; pointerStepFree: number; pointerPitch: number;
+    origins: Map<number, { start: number; pitch: number }>;
+    primaryNoteId: number;   // the note actually clicked — drives preview retrigger + lastLength
+    lastPreviewPitch: number;
+  };
+  // $state (not a plain let) so the highlightPitches derivation below can
+  // react to the live drag.
+  let moveDrag = $state<MoveDrag | null>(null);
 
   function noteOverlapsRect(n: Note, minX: number, maxX: number, minY: number, maxY: number): boolean {
     const nx0 = stepToX(n.start), nx1 = stepToX(n.start + n.length);
@@ -168,9 +210,14 @@
         selectedNoteIds = new Set([hit.id]);
       }
       if (!selectedNoteIds.has(hit.id)) return;
+      lastLength = hit.length;
+      audioEngine.previewNote(channel, hit.pitch);
       const origins = new Map<number, { start: number; pitch: number }>();
       for (const n of channel.notes) if (selectedNoteIds.has(n.id)) origins.set(n.id, { start: n.start, pitch: n.pitch });
-      moveDrag = { pointerStep: step, pointerPitch: pitch, origins };
+      moveDrag = {
+        pointerStepSnapped: step, pointerStepFree: xToStepFree(x), pointerPitch: pitch,
+        origins, primaryNoteId: hit.id, lastPreviewPitch: pitch,
+      };
     } else {
       marqueeMode = (e.ctrlKey || e.metaKey) ? 'toggle' : e.shiftKey ? 'add' : 'replace';
       marquee = { x0: x, y0: y, x1: x, y1: y };
@@ -178,14 +225,16 @@
   }
 
   function selectPointermove(e: PointerEvent) {
-    if (e.buttons === 0) { marquee = null; moveDrag = null; return; }
+    if (e.buttons === 0) { marquee = null; commitMoveDrag(); return; }
     const { x, y } = localPos(e);
     if (marquee) {
       marquee = { ...marquee, x1: x, y1: y };
     } else if (moveDrag) {
-      const step = xToStep(x);
-      const pitch = yToPitch(y);
-      const deltaStep = step - moveDrag.pointerStep;
+      const free = e.shiftKey;
+      const current = free ? xToStepFree(x) : xToStep(x);
+      const anchor = free ? moveDrag.pointerStepFree : moveDrag.pointerStepSnapped;
+      const deltaStep = current - anchor;
+      const pitch = yToPitch(y); // Y always snapped — Shift only frees the X axis
       const deltaPitch = pitch - moveDrag.pointerPitch;
       for (const n of channel.notes) {
         const origin = moveDrag.origins.get(n.id);
@@ -193,7 +242,20 @@
         n.start = Math.max(0, Math.min(patternLength - n.length, origin.start + deltaStep));
         n.pitch = clampPitch(origin.pitch + deltaPitch);
       }
+      if (pitch !== moveDrag.lastPreviewPitch) {
+        const primary = channel.notes.find(n => n.id === moveDrag!.primaryNoteId);
+        if (primary) audioEngine.previewNote(channel, primary.pitch);
+        moveDrag.lastPreviewPitch = pitch;
+      }
     }
+  }
+
+  function commitMoveDrag() {
+    if (moveDrag) {
+      const primary = channel.notes.find(n => n.id === moveDrag!.primaryNoteId);
+      if (primary) lastLength = primary.length;
+    }
+    moveDrag = null;
   }
 
   function selectPointerup() {
@@ -212,7 +274,7 @@
       }
       marquee = null;
     }
-    moveDrag = null;
+    commitMoveDrag();
   }
 
   // ── Drag deleting (right mouse button) ────────────────────────────
@@ -231,6 +293,41 @@
     const { x, y } = localPos(e);
     deleteAt(x, y);
   }
+
+  // ── Piano-key highlight while a create/resize/move gesture is active ──
+  // Right-click delete-drag is intentionally excluded — only create/resize/
+  // move gestures highlight a key.
+  let activeGestureNoteIds = $derived.by(() => {
+    if (drawDrag) return new Set<number>([drawDrag.noteId]);
+    if (moveDrag) return new Set<number>(moveDrag.origins.keys());
+    return new Set<number>();
+  });
+
+  let highlightPitches = $derived.by(() => {
+    if (activeGestureNoteIds.size === 0) return new Set<number>();
+    const s = new Set<number>();
+    for (const n of channel.notes) if (activeGestureNoteIds.has(n.id)) s.add(n.pitch);
+    return s;
+  });
+
+  function setsEqual(a: Set<number>, b: Set<number>): boolean {
+    if (a.size !== b.size) return false;
+    for (const v of a) if (!b.has(v)) return false;
+    return true;
+  }
+
+  // $derived.by returns a new Set every recompute even when its contents are
+  // unchanged (e.g. every pointermove tick during a pure length-resize,
+  // where pitch never changes) — guard against forcing a needless re-render
+  // of PianoKeys' 128 rows on every such tick.
+  let lastSentHighlight = new Set<number>();
+  $effect(() => {
+    const next = highlightPitches;
+    if (!setsEqual(next, lastSentHighlight)) {
+      lastSentHighlight = next;
+      onDragPitchesChange?.(next);
+    }
+  });
 
   // ── Dispatch by active tool ──────────────────────────────────────
   function gridMousedown(e: MouseEvent) {
@@ -277,7 +374,7 @@
       const pasted: Note[] = clipboard.map(n => ({
         id: nextNoteId++,
         pitch: n.pitch,
-        start: n.start + offset,
+        start: Math.max(0, Math.min(patternLength - n.length, n.start + offset)),
         length: n.length,
         velocity: n.velocity,
       }));
@@ -356,13 +453,18 @@
       <div class="playhead-line" style="left:{currentStepFraction * STEP_W}px;"></div>
     {/if}
 
-    {#each channel.notes as note (note.id)}
-      <div
-        class="note"
-        class:note--selected={selectedNoteIds.has(note.id)}
-        style="left:{stepToX(note.start)}px; top:{pitchToY(note.pitch)}px; width:{note.length * STEP_W - 1}px; height:{KEY_H - 1}px;"
-      ></div>
-    {/each}
+    {#key channel.id}
+      {#each channel.notes as note (note.id)}
+        <div
+          class="note"
+          class:note--selected={selectedNoteIds.has(note.id)}
+          style="left:{stepToX(note.start)}px; top:{pitchToY(note.pitch)}px; width:{note.length * STEP_W - 1}px; height:{KEY_H - 1}px;"
+          out:scale={{ duration: 140, start: 0.85 }}
+        >
+          <span class="note-label">{pitchName(note.pitch)}</span>
+        </div>
+      {/each}
+    {/key}
 
     {#if marquee}
       {@const mx = Math.min(marquee.x0, marquee.x1)}
@@ -424,9 +526,23 @@
     box-sizing: border-box;
     background: var(--accent, #90c396);
     border: 1px solid rgba(0,0,0,0.4);
-    border-radius: 2px;
+    border-radius: 5px;
     z-index: 3;
     cursor: default;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .note-label {
+    padding-left: 3px;
+    font-size: 9px;
+    font-family: 'DM Mono', monospace;
+    color: rgba(0,0,0,0.55);
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
   }
 
   .playhead-line {

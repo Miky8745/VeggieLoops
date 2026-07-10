@@ -42,6 +42,13 @@ export function xToStep(x: number): number {
   return Math.max(0, Math.floor(x / STEP_W));
 }
 
+// Unsnapped counterpart to xToStep, used only while Shift is held during a
+// drag (free/unsnapped resize or move) — returns a fractional step position
+// instead of flooring to a whole step.
+export function xToStepFree(x: number): number {
+  return Math.max(0, x / STEP_W);
+}
+
 export const GRID_TOTAL_H = (MAX_PITCH - MIN_PITCH + 1) * KEY_H;
 
 export function patternWidth(patternLength: number): number {

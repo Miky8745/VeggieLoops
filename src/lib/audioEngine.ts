@@ -15,6 +15,11 @@ const DECAY   = 0.05;  // 50ms
 const SUSTAIN = 0.7;   // sustain level, fraction of peak volume
 const RELEASE = 0.05;  // 50ms
 
+// One-off audition sound for the Piano Roll (click/place/move a note) —
+// short so rapid pitch-row sweeps during a drag don't pile up into mud.
+const PREVIEW_DURATION = 0.15;
+const PREVIEW_VELOCITY = 0.8; // matches NoteGrid's createNote() default note velocity
+
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterOut: AudioNode | null = null;
@@ -79,6 +84,16 @@ class AudioEngine {
     })();
     this.loadingPromises.set(relativePath, p);
     return p;
+  }
+
+  // One-off audition of a channel's sound at `pitch`, independent of the
+  // scheduler/transport — used by the Piano Roll to preview a note on
+  // click/place/move. Safe to call at any time; lazily creates the
+  // AudioContext exactly like loadSample() does.
+  async previewNote(ch: ChannelData, pitch: number): Promise<void> {
+    const ctx = await this.ensureCtx();
+    const playTime = ctx.currentTime + RAMP;
+    this.triggerPitched(ch, pitch, ch.volume * PREVIEW_VELOCITY, ch.pan, playTime, PREVIEW_DURATION);
   }
 
   private async resolveFolder(folderPath: string): Promise<MultisampleFolder | null> {
@@ -206,9 +221,14 @@ class AudioEngine {
         // boolean step sequencer, unchanged from before notes existed.
         if (ch.notes.length > 0) {
           for (const note of ch.notes) {
-            if (note.start !== chStep) continue;
+            // note.start can be fractional (Shift-free-moved/resized in the
+            // Piano Roll) — match on its containing whole step, then offset
+            // playTime by the sub-step remainder so the fractional position
+            // is still audible at the right moment instead of never matching.
+            if (Math.floor(note.start) !== chStep) continue;
+            const subStepOffset = (note.start - Math.floor(note.start)) * this.stepDuration;
             const durationSeconds = note.length * this.stepDuration;
-            this.triggerPitched(ch, note.pitch, ch.volume * note.velocity, pan, playTime, durationSeconds);
+            this.triggerPitched(ch, note.pitch, ch.volume * note.velocity, pan, playTime + subStepOffset, durationSeconds);
           }
         } else if (ch.steps[chStep]) {
           this.triggerPitched(ch, 60, ch.volume, pan, playTime);

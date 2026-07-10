@@ -19,8 +19,10 @@ export interface MenuItem {
 export interface Note {
   id: number;
   pitch: number;    // MIDI number, FL octave convention (60 = C5)
-  start: number;    // step index within the pattern (0..patternLength-1)
-  length: number;   // in 16th-note steps, >= 1
+  start: number;    // step index within the pattern (0..patternLength-1); may be
+                     // fractional when moved/resized with Shift held in the Piano
+                     // Roll (free/unsnapped editing)
+  length: number;   // in 16th-note steps, >= ~0.05; may be fractional under free editing
   velocity: number; // 0..1
 }
 

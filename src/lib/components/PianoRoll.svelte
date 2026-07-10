@@ -24,6 +24,7 @@
   let gridScrollTop = $state(0);
   let gridViewportWidth = $state(0);
   let noteGridRef: NoteGrid | undefined = $state();
+  let highlightPitches = $state<Set<number>>(new Set());
 
   let channel = $derived(channelStore.selectedChannel);
   let channelName = $derived(channel ? formatChannelLabel(channel) : 'No channel');
@@ -129,7 +130,7 @@
           <PianoRollRuler patternLength={channelStore.patternLength} scrollLeft={gridScrollLeft} activeStep={wrappedStep} />
         </div>
         <div class="pr-keys-slot">
-          <PianoKeys scrollTop={gridScrollTop} />
+          <PianoKeys scrollTop={gridScrollTop} {highlightPitches} />
         </div>
         <div class="pr-grid-slot">
           <NoteGrid
@@ -142,6 +143,7 @@
             currentStepFraction={wrappedStepFraction}
             onScroll={handleScroll}
             onViewportResize={(w) => gridViewportWidth = w}
+            onDragPitchesChange={(p) => highlightPitches = p}
           />
         </div>
         <div class="pr-vel-corner"></div>
