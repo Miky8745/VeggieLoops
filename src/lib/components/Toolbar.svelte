@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { MenuItem } from '$lib/types';
   import MenuBar from './MenuBar.svelte';
+  import BlackBox from './BlackBox.svelte';
+  import PeakMeter from './PeakMeter.svelte';
   import { playback } from '$lib/playbackStore.svelte';
   import { patternStore } from '$lib/patternStore.svelte';
   import { windowFocus } from '$lib/windowFocusStore.svelte';
@@ -226,15 +228,12 @@
       </button>
     </div>
 
-    <!-- Monitor placeholder -->
+    <!-- Audio monitor: oscilloscope / spectrum analyzer -->
     <div class="tb-vsep"></div>
-    <div class="tb-monitor" aria-label="Monitor (placeholder)"></div>
+    <BlackBox />
 
     <!-- Stereo peak meter -->
-    <div class="tb-peak" aria-label="Stereo peak meter">
-      <div class="tb-peak-bar"></div>
-      <div class="tb-peak-bar"></div>
-    </div>
+    <PeakMeter />
   </div>
 
   <!-- ── Row 2 / Col 1 : Info box (auto-matches menu section width) ── -->
@@ -564,34 +563,6 @@
     letter-spacing: 0.01em;
     line-height: 1;
     pointer-events: none;
-  }
-
-  /* ── Monitor placeholder ─────────────────────────────────────── */
-  .tb-monitor {
-    width: 100px;
-    height: 38px;
-    background: #0f0f0f;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 3px;
-    margin: 0 6px;
-    flex-shrink: 0;
-  }
-
-  /* ── Stereo peak meter ───────────────────────────────────────── */
-  .tb-peak {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 0 10px;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .tb-peak-bar {
-    width: 72px;
-    height: 9px;
-    background: #1c2a1c;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 2px;
   }
 
   /* ── Row-2 panel buttons ─────────────────────────────────────── */

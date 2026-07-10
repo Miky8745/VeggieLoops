@@ -31,6 +31,15 @@ const PREVIEW_VELOCITY = 0.8; // matches NoteGrid's createNote() default note ve
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterOut: AudioNode | null = null;
+  // Tap off the master bus for visualization (Toolbar's blackbox monitor +
+  // stereo peak meter). Pure analysis nodes — never connected onward to
+  // destination themselves, so adding/removing them can't affect audible
+  // output. `analyser` sees the full mixed signal (used for the
+  // oscilloscope/spectrum); `analyserL`/`analyserR` sit behind a splitter for
+  // the two independent peak-meter bars.
+  private analyser: AnalyserNode | null = null;
+  private analyserL: AnalyserNode | null = null;
+  private analyserR: AnalyserNode | null = null;
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private scheduledStep  = 0;
   private nextStepTime   = 0;
@@ -68,7 +77,39 @@ class AudioEngine {
     comp.release.value   = 0.05;
     comp.connect(ctx.destination);
     this.masterOut = comp;
+
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.75;
+    comp.connect(analyser);
+    this.analyser = analyser;
+
+    const splitter = ctx.createChannelSplitter(2);
+    comp.connect(splitter);
+    const analyserL = ctx.createAnalyser();
+    const analyserR = ctx.createAnalyser();
+    analyserL.fftSize = 1024;
+    analyserR.fftSize = 1024;
+    splitter.connect(analyserL, 0);
+    splitter.connect(analyserR, 1);
+    this.analyserL = analyserL;
+    this.analyserR = analyserR;
+
     return ctx;
+  }
+
+  // Full mixed-down master signal, for the Toolbar blackbox's oscilloscope
+  // (getByteTimeDomainData) / spectrum (getByteFrequencyData) modes. Null
+  // until the AudioContext has been built (warmUp()/ensureCtx()).
+  getAnalyser(): AnalyserNode | null {
+    return this.analyser;
+  }
+
+  // Independent left/right taps for the Toolbar's stereo peak meter. Null
+  // until the AudioContext has been built.
+  getStereoAnalysers(): { left: AnalyserNode; right: AnalyserNode } | null {
+    if (!this.analyserL || !this.analyserR) return null;
+    return { left: this.analyserL, right: this.analyserR };
   }
 
   // Eagerly constructs the AudioContext without resuming it, so the actual
