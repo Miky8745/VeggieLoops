@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Note } from '$lib/types';
-  import { STEP_W, stepToX, patternWidth } from '$lib/pianoroll/pitch';
+  import { BASE_STEP_W, stepToX, patternWidth } from '$lib/pianoroll/pitch';
 
   let {
     notes,
@@ -53,15 +53,15 @@
     {/if}
   </div>
 {:else}
-  <div class="mini-roll" style="width:{patternWidth(patternLength)}px; height:{rowHeight}px;">
+  <div class="mini-roll" style="width:{patternWidth(patternLength, BASE_STEP_W)}px; height:{rowHeight}px;">
     {#each notes as note (note.id)}
       <div
         class="mini-note"
-        style="left:{stepToX(note.start)}px; top:{barTop(note.pitch)}px; width:{note.length * STEP_W - 1}px; height:{barHeight()}px;"
+        style="left:{stepToX(note.start, BASE_STEP_W)}px; top:{barTop(note.pitch)}px; width:{note.length * BASE_STEP_W - 1}px; height:{barHeight()}px;"
       ></div>
     {/each}
     {#if activeStep >= 0}
-      <div class="mini-playhead" style="left:{stepToX(activeStep)}px; width:{STEP_W}px;"></div>
+      <div class="mini-playhead" style="left:{stepToX(activeStep, BASE_STEP_W)}px; width:{BASE_STEP_W}px;"></div>
     {/if}
   </div>
 {/if}

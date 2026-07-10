@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { STEP_W, patternWidth } from '$lib/pianoroll/pitch';
+  import { stepW, patternWidth } from '$lib/pianoroll/pitch';
 
   let {
     patternLength,
@@ -24,7 +24,7 @@
         class:ruler-step--grey={stepGroup(i) === 0}
         class:ruler-step--orange={stepGroup(i) === 1}
         class:ruler-step--playing={i === activeStep}
-        style="width:{STEP_W}px;"
+        style="width:{stepW()}px;"
       >
         {#if i % 4 === 0}<span class="ruler-num">{i / 4 + 1}</span>{/if}
       </div>

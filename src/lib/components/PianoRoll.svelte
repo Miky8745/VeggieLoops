@@ -93,6 +93,7 @@
 
 {#if channel}
   <FloatingWindow
+    id="piano-roll"
     bind:show
     {workspaceBounds}
     x={220} y={140} width={760} height={480}

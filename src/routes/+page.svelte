@@ -15,6 +15,8 @@
   import { channelStore } from '$lib/channelStore.svelte';
   import { historyStore } from '$lib/historyStore.svelte';
   import { playback } from '$lib/playbackStore.svelte';
+  import { audioEngine } from '$lib/audioEngine';
+  import { windowFocus } from '$lib/windowFocusStore.svelte';
   import { saveProject, loadProject, resetAllStores } from '$lib/projectSerializer';
   import type { FileNode } from '$lib/types';
 
@@ -70,6 +72,8 @@
 
     const loaded = await loadProject(name);
     if (!loaded) resetAllStores();
+    audioEngine.warmUp();
+    audioEngine.preloadChannels(channelStore.channels);
     await historyStore.init(name);
     historyStore.startWatching();
     playback.startWatching();
@@ -157,6 +161,7 @@
       onOpenPianoRoll={(channelId) => {
         channelStore.selectedChannelId = channelId;
         showPianoRoll = true;
+        windowFocus.focus('piano-roll');
       }}
     />
     <PianoRoll bind:show={showPianoRoll} {workspaceBounds} bind:showPianoRollOverview />

@@ -6,6 +6,14 @@ import { channelLoopLength } from '$lib/channelLoop';
 const LOOKAHEAD = 0.1;  // seconds to schedule ahead
 const INTERVAL  = 25;   // ms between scheduler ticks
 const RAMP      = 0.0005; // 0.5ms de-click ramp — short enough not to affect transients
+// How late loadSample() is allowed to resolve past a hit's intended playTime
+// before scheduleHit() drops it — guards the scheduler against an audible
+// pile-up of stale beats. Widened from an earlier 50ms: a cold IPC read +
+// decodeAudioData() routinely exceeds that on the very first trigger of a
+// given sample, which silently dropped the hit entirely instead of playing
+// it. previewNote() bypasses this cutoff altogether (see allowLate below)
+// since a one-shot audition has no pile-up concern.
+const STALE_CUTOFF_SEC = 0.15;
 
 // Fixed ADSR envelope applied to piano-roll notes (not plain step-sequencer
 // one-shots) so a note actually stops when its length says it should,
@@ -48,22 +56,56 @@ class AudioEngine {
   // change where "elapsed time so far" lands under a new, larger divisor.
   private loopAnchorTime = 0;
 
+  private buildCtx(): AudioContext {
+    const ctx = new AudioContext();
+    // Limiter: only acts near 0 dBFS so it prevents clipping without
+    // coloring the sound during normal single-channel use.
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -6;
+    comp.knee.value      = 0;
+    comp.ratio.value     = 20;
+    comp.attack.value    = 0.001;
+    comp.release.value   = 0.05;
+    comp.connect(ctx.destination);
+    this.masterOut = comp;
+    return ctx;
+  }
+
+  // Eagerly constructs the AudioContext without resuming it, so the actual
+  // first user-gesture-triggered sound doesn't pay context-construction
+  // latency on top of its own sample load — safe to call anytime since
+  // construction (unlike resume()) never requires a user gesture.
+  warmUp(): void {
+    if (!this.ctx) this.ctx = this.buildCtx();
+  }
+
   private async ensureCtx(): Promise<AudioContext> {
-    if (!this.ctx) {
-      this.ctx = new AudioContext();
-      // Limiter: only acts near 0 dBFS so it prevents clipping without
-      // coloring the sound during normal single-channel use.
-      const comp = this.ctx.createDynamicsCompressor();
-      comp.threshold.value = -6;
-      comp.knee.value      = 0;
-      comp.ratio.value     = 20;
-      comp.attack.value    = 0.001;
-      comp.release.value   = 0.05;
-      comp.connect(this.ctx.destination);
-      this.masterOut = comp;
-    }
+    if (!this.ctx) this.ctx = this.buildCtx();
     if (this.ctx.state === 'suspended') await this.ctx.resume();
     return this.ctx;
+  }
+
+  // Fire-and-forget warm-up of a channel's sample(s) into the cache ahead of
+  // playback — piggybacks entirely on loadSample()/resolveFolder()'s own
+  // dedup Maps, so this never duplicates an IPC/decode already in flight or
+  // already cached, whether triggered by preload, real playback, or both.
+  preloadChannel(ch: ChannelData): void {
+    if (ch.samplePath) this.loadSample(ch.samplePath);
+    if (ch.sampleFolder) {
+      const folderPath = ch.sampleFolder;
+      this.resolveFolder(folderPath).then(folder => {
+        if (!folder) return;
+        // Mirrors pickFromFolder()'s own selection rule: once any pitched
+        // entries exist, only those are ever chosen; allPaths is only used
+        // as the random fallback when pitched is empty.
+        const paths = folder.pitched.length > 0 ? folder.pitched.map(e => e.path) : folder.allPaths;
+        for (const p of paths) this.loadSample(p);
+      });
+    }
+  }
+
+  preloadChannels(channels: ChannelData[]): void {
+    for (const ch of channels) this.preloadChannel(ch);
   }
 
   async loadSample(relativePath: string): Promise<AudioBuffer | null> {
@@ -93,7 +135,7 @@ class AudioEngine {
   async previewNote(ch: ChannelData, pitch: number): Promise<void> {
     const ctx = await this.ensureCtx();
     const playTime = ctx.currentTime + RAMP;
-    this.triggerPitched(ch, pitch, ch.volume * PREVIEW_VELOCITY, ch.pan, playTime, PREVIEW_DURATION);
+    this.triggerPitched(ch, pitch, ch.volume * PREVIEW_VELOCITY, ch.pan, playTime, PREVIEW_DURATION, true);
   }
 
   private async resolveFolder(folderPath: string): Promise<MultisampleFolder | null> {
@@ -119,26 +161,27 @@ class AudioEngine {
   // 60 for a plain step-sequencer trigger) — resolves either a single sample
   // (rate relative to middle C, as always) or a multisample folder (rate
   // relative to whichever recorded sample is nearest targetPitch).
-  private triggerPitched(ch: ChannelData, targetPitch: number, vol: number, pan: number, playTime: number, durationSeconds?: number) {
+  private triggerPitched(ch: ChannelData, targetPitch: number, vol: number, pan: number, playTime: number, durationSeconds?: number, allowLate = false) {
     if (ch.sampleFolder) {
       const folderPath = ch.sampleFolder;
       this.resolveFolder(folderPath).then(folder => {
         const picked = folder && pickFromFolder(folder, targetPitch);
-        if (picked) this.scheduleHit(picked.path, picked.rate, vol, pan, playTime, durationSeconds);
+        if (picked) this.scheduleHit(picked.path, picked.rate, vol, pan, playTime, durationSeconds, allowLate);
       });
     } else if (ch.samplePath) {
       const rate = 2 ** ((targetPitch - 60) / 12);
-      this.scheduleHit(ch.samplePath, rate, vol, pan, playTime, durationSeconds);
+      this.scheduleHit(ch.samplePath, rate, vol, pan, playTime, durationSeconds, allowLate);
     }
   }
 
-  private scheduleHit(path: string, rate: number, vol: number, pan: number, playTime: number, durationSeconds?: number) {
+  private scheduleHit(path: string, rate: number, vol: number, pan: number, playTime: number, durationSeconds?: number, allowLate = false) {
     this.loadSample(path).then(buf => {
       if (!buf || !this.ctx) return;
-      // If the load resolved more than 50ms after the beat, skip it —
-      // playing a stale beat causes a pile-up of out-of-time hits.
-      // Within 50ms, clamp to now so the gain schedule stays valid.
-      if (this.ctx.currentTime - playTime > 0.05) return;
+      // If the load resolved more than STALE_CUTOFF_SEC after the beat, skip
+      // it — playing a stale beat causes a pile-up of out-of-time hits.
+      // allowLate (previewNote's one-shot auditions) bypasses this entirely.
+      // Within the cutoff, clamp to now so the gain schedule stays valid.
+      if (!allowLate && this.ctx.currentTime - playTime > STALE_CUTOFF_SEC) return;
       this.playSample(buf, vol, pan, Math.max(playTime, this.ctx.currentTime + RAMP), rate, durationSeconds);
     });
   }

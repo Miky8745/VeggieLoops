@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ChannelData } from '$lib/types';
-  import { STEP_W, LANE_H, patternWidth, stepToX } from '$lib/pianoroll/pitch';
+  import { stepW, LANE_H, patternWidth, stepToX } from '$lib/pianoroll/pitch';
 
   let {
     channel,
@@ -45,13 +45,13 @@
 <div class="vel-viewport" bind:this={laneEl} style="height:{LANE_H}px;">
   <div class="vel-content" style="width:{patternWidth(patternLength)}px; transform: translateX(-{scrollLeft}px);">
     {#each Array(patternLength) as _, i}
-      <div class="vel-col" class:vel-col--orange={Math.floor(i / 4) % 2 === 1} style="left:{stepToX(i)}px; width:{STEP_W}px;"></div>
+      <div class="vel-col" class:vel-col--orange={Math.floor(i / 4) % 2 === 1} style="left:{stepToX(i)}px; width:{stepW()}px;"></div>
     {/each}
     {#each channel.notes as note (note.id)}
       <div
         class="vel-bar"
         class:vel-bar--selected={selectedNoteIds.has(note.id)}
-        style="left:{stepToX(note.start)}px; width:{note.length * STEP_W - 2}px; height:{note.velocity * LANE_H}px;"
+        style="left:{stepToX(note.start)}px; width:{note.length * stepW() - 2}px; height:{note.velocity * LANE_H}px;"
         onmousedown={(e) => barMousedown(e, note.id)}
         onpointerenter={(e) => barPointerenter(e, note.id)}
         oncontextmenu={(e) => e.preventDefault()}

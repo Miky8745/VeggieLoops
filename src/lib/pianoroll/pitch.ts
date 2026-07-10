@@ -1,11 +1,31 @@
+import { pianoRollZoom } from '$lib/pianoRollZoom.svelte';
+
 export const MIN_PITCH = 0;
 export const MAX_PITCH = 127;
-export const KEY_H = 14;    // px per semitone row
-export const STEP_W = 24;   // px per 16th-note step (matches ChannelRow's .step width)
+// Base (1x zoom) sizes. Used directly by MiniNoteRoll's Channel Rack preview,
+// which must stay a fixed scale regardless of the Piano Roll's own zoom —
+// everywhere else should go through keyH()/stepW() below.
+export const BASE_KEY_H = 14;  // px per semitone row at 1x
+export const BASE_STEP_W = 24; // px per 16th-note step at 1x (matches ChannelRow's .step width)
 export const KEY_COL_W = 56;
 export const RULER_H = 20;
 export const LANE_H = 70;
 export const DEFAULT_CENTER_PITCH = 60; // FL convention: 60 = C5
+
+// Live, zoom-scaled sizes — read pianoRollZoom.zoom ($state) so calling these
+// inside a template expression/$derived/$effect keeps that context reactive
+// to zoom changes, the same way any other $state read would.
+export function keyH(): number {
+  return BASE_KEY_H * pianoRollZoom.zoom;
+}
+
+export function stepW(): number {
+  return BASE_STEP_W * pianoRollZoom.zoom;
+}
+
+export function gridTotalH(): number {
+  return (MAX_PITCH - MIN_PITCH + 1) * keyH();
+}
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const BLACK_OFFSETS = new Set([1, 3, 6, 8, 10]);
@@ -26,33 +46,33 @@ export function isCNote(pitch: number): boolean {
 
 // y=0 is the top of the grid == MAX_PITCH; pitch decreases downward (high notes on top).
 export function pitchToY(pitch: number): number {
-  return (MAX_PITCH - pitch) * KEY_H;
+  return (MAX_PITCH - pitch) * keyH();
 }
 
 export function yToPitch(y: number): number {
-  const p = MAX_PITCH - Math.floor(y / KEY_H);
+  const p = MAX_PITCH - Math.floor(y / keyH());
   return Math.max(MIN_PITCH, Math.min(MAX_PITCH, p));
 }
 
-export function stepToX(step: number): number {
-  return step * STEP_W;
+// widthPerStep defaults to the live zoomed step width; MiniNoteRoll passes
+// BASE_STEP_W explicitly so its Channel Rack preview stays zoom-independent.
+export function stepToX(step: number, widthPerStep = stepW()): number {
+  return step * widthPerStep;
 }
 
 export function xToStep(x: number): number {
-  return Math.max(0, Math.floor(x / STEP_W));
+  return Math.max(0, Math.floor(x / stepW()));
 }
 
 // Unsnapped counterpart to xToStep, used only while Shift is held during a
 // drag (free/unsnapped resize or move) — returns a fractional step position
 // instead of flooring to a whole step.
 export function xToStepFree(x: number): number {
-  return Math.max(0, x / STEP_W);
+  return Math.max(0, x / stepW());
 }
 
-export const GRID_TOTAL_H = (MAX_PITCH - MIN_PITCH + 1) * KEY_H;
-
-export function patternWidth(patternLength: number): number {
-  return patternLength * STEP_W;
+export function patternWidth(patternLength: number, widthPerStep = stepW()): number {
+  return patternLength * widthPerStep;
 }
 
 export function clampPitch(pitch: number): number {

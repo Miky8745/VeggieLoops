@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { windowFocus } from '$lib/windowFocusStore.svelte';
 
   export interface WorkspaceBounds {
     x: number;
@@ -15,6 +16,7 @@
   }
 
   let {
+    id,
     show = $bindable(true),
     x = $bindable(120),
     y = $bindable(80),
@@ -27,6 +29,7 @@
     header,
     children,
   }: {
+    id: string;
     show?: boolean;
     x?: number;
     y?: number;
@@ -109,10 +112,15 @@
   // toolbar or the file explorer. The pre-maximize x/y/width/height are
   // left untouched so restoring snaps back to exactly where it was.
   let rectStyle = $derived(
-    maximized
+    (maximized
       ? `left:${workspaceBounds.x}px; top:${workspaceBounds.y}px; width:${workspaceBounds.width}px; height:${workspaceBounds.height}px;`
-      : `left:${x}px; top:${y}px; width:${width}px; height:${height}px;`
+      : `left:${x}px; top:${y}px; width:${width}px; height:${height}px;`)
+    + ` z-index:${windowFocus.zIndexOf(id)};`
   );
+
+  function onWindowPointerdown() {
+    windowFocus.focus(id);
+  }
 </script>
 
 <svelte:window onmousemove={onWindowMousemove} onmouseup={onWindowMouseup} />
@@ -124,6 +132,7 @@
     role="dialog"
     tabindex="-1"
     style={rectStyle}
+    onpointerdown={onWindowPointerdown}
   >
     {@render header({ onDragStart, maximized, toggleMaximize })}
     <div class="fw-body">
@@ -151,7 +160,7 @@
     display: flex;
     flex-direction: column;
     box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-    z-index: 100;
+    /* z-index is set dynamically via inline style from windowFocusStore */
     overflow: hidden;
   }
 

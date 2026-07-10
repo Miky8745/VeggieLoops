@@ -104,6 +104,7 @@
 {/if}
 
 <FloatingWindow
+  id="channel-rack"
   bind:show
   {workspaceBounds}
   x={120} y={80} width={720} height={420}
@@ -336,11 +337,11 @@
           if (drop.kind === 'file') {
             target.samplePath = drop.path;
             target.sampleFolder = null;
-            audioEngine.loadSample(drop.path);
           } else {
             target.sampleFolder = drop.path;
             target.samplePath = null;
           }
+          audioEngine.preloadChannel(target);
         }}
         onOpenPianoRoll={() => onOpenPianoRoll(ch.id)}
       />

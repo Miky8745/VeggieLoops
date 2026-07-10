@@ -3,6 +3,7 @@
   import MenuBar from './MenuBar.svelte';
   import { playback } from '$lib/playbackStore.svelte';
   import { patternStore } from '$lib/patternStore.svelte';
+  import { windowFocus } from '$lib/windowFocusStore.svelte';
 
   let {
     menus,
@@ -19,6 +20,25 @@
     showPlaylist?:    boolean;
     showMixer?:       boolean;
   } = $props();
+
+  // Panel toggle buttons: closed -> open+focus; open-but-not-frontmost ->
+  // bring to front (stays open); open-and-frontmost -> close. Matches
+  // common desktop taskbar semantics.
+  function toggleChannelRack() {
+    if (!showChannelRack) { showChannelRack = true; windowFocus.focus('channel-rack'); }
+    else if (!windowFocus.isFrontmost('channel-rack')) windowFocus.focus('channel-rack');
+    else showChannelRack = false;
+  }
+  function togglePianoRoll() {
+    if (!showPianoRoll) { showPianoRoll = true; windowFocus.focus('piano-roll'); }
+    else if (!windowFocus.isFrontmost('piano-roll')) windowFocus.focus('piano-roll');
+    else showPianoRoll = false;
+  }
+  function togglePlaylist() {
+    if (!showPlaylist) { showPlaylist = true; windowFocus.focus('playlist'); }
+    else if (!windowFocus.isFrontmost('playlist')) windowFocus.focus('playlist');
+    else showPlaylist = false;
+  }
 
   // Transport
   let isPaused    = $state(false);
@@ -236,7 +256,7 @@
     </button>
 
     <!-- Channel Rack -->
-    <button class="tb-pb" class:tb-pb--on={showChannelRack} onclick={() => showChannelRack = !showChannelRack} title="Channel Rack">
+    <button class="tb-pb" class:tb-pb--on={showChannelRack} onclick={toggleChannelRack} title="Channel Rack">
       <svg width="13" height="12" viewBox="0 0 13 12" fill="currentColor" aria-hidden="true">
         <rect x="0"    y="2"  width="2" height="10" rx="0.75"/>
         <rect x="2.75" y="0"  width="2" height="12" rx="0.75"/>
@@ -247,7 +267,7 @@
     </button>
 
     <!-- Piano Roll -->
-    <button class="tb-pb" class:tb-pb--on={showPianoRoll} onclick={() => showPianoRoll = !showPianoRoll} title="Piano Roll">
+    <button class="tb-pb" class:tb-pb--on={showPianoRoll} onclick={togglePianoRoll} title="Piano Roll">
       <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor" aria-hidden="true">
         <rect x="0"   y="0" width="3.5" height="13" rx="0.75"/>
         <rect x="4.5" y="0" width="3.5" height="13" rx="0.75"/>
@@ -258,7 +278,7 @@
     </button>
 
     <!-- Playlist -->
-    <button class="tb-pb" class:tb-pb--on={showPlaylist} onclick={() => showPlaylist = !showPlaylist} title="Playlist">
+    <button class="tb-pb" class:tb-pb--on={showPlaylist} onclick={togglePlaylist} title="Playlist">
       <svg width="13" height="11" viewBox="0 0 13 11" fill="currentColor" aria-hidden="true">
         <rect x="0" y="0"    width="13" height="2.5" rx="0.75"/>
         <rect x="0" y="4.25" width="13" height="2.5" rx="0.75"/>

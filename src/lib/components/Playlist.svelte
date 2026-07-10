@@ -137,6 +137,7 @@
 </script>
 
 <FloatingWindow
+  id="playlist"
   bind:show
   {workspaceBounds}
   maximized={true}

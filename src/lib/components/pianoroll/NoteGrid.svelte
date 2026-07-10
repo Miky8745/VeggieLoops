@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { scale } from 'svelte/transition';
   import type { ChannelData, Note } from '$lib/types';
   import {
-    MIN_PITCH, MAX_PITCH, KEY_H, STEP_W, GRID_TOTAL_H, DEFAULT_CENTER_PITCH,
+    MIN_PITCH, MAX_PITCH, DEFAULT_CENTER_PITCH,
+    keyH, stepW, gridTotalH,
     patternWidth, stepToX, pitchToY, xToStep, xToStepFree, yToPitch, clampPitch, isBlackKey, isCNote, pitchName,
   } from '$lib/pianoroll/pitch';
   import { audioEngine } from '$lib/audioEngine';
+  import { pianoRollZoom } from '$lib/pianoRollZoom.svelte';
 
   let {
     channel,
@@ -186,7 +188,7 @@
 
   function noteOverlapsRect(n: Note, minX: number, maxX: number, minY: number, maxY: number): boolean {
     const nx0 = stepToX(n.start), nx1 = stepToX(n.start + n.length);
-    const ny0 = pitchToY(n.pitch), ny1 = ny0 + KEY_H;
+    const ny0 = pitchToY(n.pitch), ny1 = ny0 + keyH();
     return nx0 < maxX && nx1 > minX && ny0 < maxY && ny1 > minY;
   }
 
@@ -352,11 +354,54 @@
     e.preventDefault();
   }
 
-  // ── Keyboard: delete / copy / paste ──────────────────────────────
+  // ── Zoom: ctrl/cmd+scroll and ctrl/cmd+=/- ────────────────────────
+  function isTypingTarget(target: EventTarget | null): boolean {
+    const t = target as HTMLElement | null;
+    return t?.tagName === 'INPUT' || t?.tagName === 'TEXTAREA' || !!t?.isContentEditable;
+  }
+
+  async function reanchorZoom(anchorX: number, anchorY: number, zoomIn: boolean) {
+    if (!viewportEl) return;
+    const oldZoom = pianoRollZoom.zoom;
+    const contentX = viewportEl.scrollLeft + anchorX;
+    const contentY = viewportEl.scrollTop + anchorY;
+    if (zoomIn) pianoRollZoom.zoomIn(); else pianoRollZoom.zoomOut();
+    await tick(); // let grid-content's new width/height land in the DOM first
+    const ratio = pianoRollZoom.zoom / oldZoom;
+    viewportEl.scrollLeft = contentX * ratio - anchorX;
+    viewportEl.scrollTop  = contentY * ratio - anchorY;
+  }
+
+  function zoomAt(clientX: number, clientY: number, zoomIn: boolean) {
+    if (!viewportEl) return;
+    const rect = viewportEl.getBoundingClientRect();
+    reanchorZoom(clientX - rect.left, clientY - rect.top, zoomIn);
+  }
+
+  function zoomAtCenter(zoomIn: boolean) {
+    if (!viewportEl) return;
+    reanchorZoom(viewportEl.clientWidth / 2, viewportEl.clientHeight / 2, zoomIn);
+  }
+
+  function onGridWheel(e: WheelEvent) {
+    if (!(e.ctrlKey || e.metaKey)) return; // let normal 2-axis scroll pass through untouched
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, Math.sign(e.deltaY) < 0);
+  }
+
+  // ── Keyboard: delete / copy / paste / zoom ────────────────────────
   let clipboard: Note[] = [];
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+      if (isTypingTarget(e.target)) return;
+      e.preventDefault();
+      zoomAtCenter(true);
+    } else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+      if (isTypingTarget(e.target)) return;
+      e.preventDefault();
+      zoomAtCenter(false);
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selectedNoteIds.size === 0) return;
       channel.notes = channel.notes.filter(n => !selectedNoteIds.has(n.id));
       selectedNoteIds = new Set();
@@ -419,11 +464,11 @@
 
 <svelte:window onpointermove={gridPointermove} onpointerup={gridPointerup} onkeydown={handleKeydown} />
 
-<div class="grid-viewport" bind:this={viewportEl} onscroll={onGridScroll} role="grid" aria-label="Note grid" tabindex="-1">
+<div class="grid-viewport" bind:this={viewportEl} onscroll={onGridScroll} onwheel={onGridWheel} role="grid" aria-label="Note grid" tabindex="-1">
   <div
     class="grid-content"
     bind:this={contentEl}
-    style="width:{patternWidth(patternLength)}px; height:{GRID_TOTAL_H}px;"
+    style="width:{patternWidth(patternLength)}px; height:{gridTotalH()}px;"
     onmousedown={gridMousedown}
     oncontextmenu={gridContextmenu}
     role="presentation"
@@ -433,7 +478,7 @@
         class="grid-row"
         class:grid-row--black={isBlackKey(p)}
         class:grid-row--c={isCNote(p)}
-        style="top:{pitchToY(p)}px; height:{KEY_H}px;"
+        style="top:{pitchToY(p)}px; height:{keyH()}px;"
       ></div>
     {/each}
 
@@ -441,16 +486,16 @@
       <div
         class="grid-col"
         class:grid-col--orange={Math.floor(i / 4) % 2 === 1}
-        style="left:{stepToX(i)}px; width:{STEP_W}px;"
+        style="left:{stepToX(i)}px; width:{stepW()}px;"
       ></div>
     {/each}
 
     {#if activeStep >= 0}
-      <div class="playhead" style="left:{stepToX(activeStep)}px; width:{STEP_W}px;"></div>
+      <div class="playhead" style="left:{stepToX(activeStep)}px; width:{stepW()}px;"></div>
     {/if}
 
     {#if currentStepFraction >= 0}
-      <div class="playhead-line" style="left:{currentStepFraction * STEP_W}px;"></div>
+      <div class="playhead-line" style="left:{currentStepFraction * stepW()}px;"></div>
     {/if}
 
     {#key channel.id}
@@ -458,7 +503,7 @@
         <div
           class="note"
           class:note--selected={selectedNoteIds.has(note.id)}
-          style="left:{stepToX(note.start)}px; top:{pitchToY(note.pitch)}px; width:{note.length * STEP_W - 1}px; height:{KEY_H - 1}px;"
+          style="left:{stepToX(note.start)}px; top:{pitchToY(note.pitch)}px; width:{note.length * stepW() - 1}px; height:{keyH() - 1}px;"
           out:scale={{ duration: 140, start: 0.85 }}
         >
           <span class="note-label">{pitchName(note.pitch)}</span>

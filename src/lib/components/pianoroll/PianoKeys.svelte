@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MIN_PITCH, MAX_PITCH, KEY_H, GRID_TOTAL_H, isBlackKey, isCNote, pitchName } from '$lib/pianoroll/pitch';
+  import { MIN_PITCH, MAX_PITCH, keyH, gridTotalH, isBlackKey, isCNote, pitchName } from '$lib/pianoroll/pitch';
 
   let { scrollTop, highlightPitches = new Set<number>() }: { scrollTop: number; highlightPitches?: Set<number> } = $props();
 
@@ -7,7 +7,7 @@
 </script>
 
 <div class="keys-viewport">
-  <div class="keys-content" style="height:{GRID_TOTAL_H}px; transform: translateY(-{scrollTop}px);">
+  <div class="keys-content" style="height:{gridTotalH()}px; transform: translateY(-{scrollTop}px);">
     {#each pitches as p, i (p)}
       {@const belowP = pitches[i + 1]}
       {@const noBorder = isBlackKey(p) || (belowP !== undefined && isBlackKey(belowP))}
@@ -20,7 +20,7 @@
         class:key-row--csharp={p % 12 === 1}
         class:key-row--highlighted={highlighted && !isBlackKey(p)}
         class:key-row--csharp-below-highlighted={csharpBelowCHighlighted}
-        style="height:{KEY_H}px;"
+        style="height:{keyH()}px;"
       >
         {#if isBlackKey(p)}
           <div class="black-key" class:black-key--highlighted={highlighted}></div>
