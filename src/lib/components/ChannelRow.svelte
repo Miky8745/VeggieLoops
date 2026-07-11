@@ -16,6 +16,7 @@
     onStepChange,
     onSampleDrop,
     onOpenPianoRoll,
+    onDelete,
   }: {
     channel:      ChannelData;
     nameColWidth: number;
@@ -25,6 +26,7 @@
     onStepChange: (step: number, active: boolean) => void;
     onSampleDrop: (drop: FileDropDetail) => void;
     onOpenPianoRoll: () => void;
+    onDelete:     () => void;
   } = $props();
 
   function formatPan(v: number): string {
@@ -99,11 +101,38 @@
   }
 
   // Mini piano-roll preview (replaces the step buttons for note-based channels)
+
+  // Right-click context menu (delete channel). Steps have their own
+  // right-click meaning (erase step, see stepMousedown) and stop this from
+  // firing when right-clicked — see their oncontextmenu handler below.
+  let contextMenu = $state<{ x: number; y: number } | null>(null);
+
+  function openContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    contextMenu = { x: e.clientX, y: e.clientY };
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+  }
+
+  function deleteChannel() {
+    closeContextMenu();
+    onDelete();
+  }
+
+  // Mounted straight onto <body> so the menu escapes the Channel Rack
+  // list's overflow:auto clipping — same reasoning as DragTooltip.svelte's
+  // own portal action.
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 </script>
 
 <svelte:window onpointerup={globalPointerup} />
 
-<div class="ch-row" class:ch-row--selected={selected} oncontextmenu={(e) => e.preventDefault()} role="row" tabindex="-1">
+<div class="ch-row" class:ch-row--selected={selected} oncontextmenu={openContextMenu} role="row" tabindex="-1">
   <!-- Mute dot -->
   <button
     class="mute-dot"
@@ -171,7 +200,7 @@
           class:step--playing={i === wrappedStep}
           onmousedown={(e) => stepMousedown(e, i)}
           onpointerenter={(e) => stepPointerenter(e, i)}
-          oncontextmenu={(e) => e.preventDefault()}
+          oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
           aria-label="Step {i + 1}"
           aria-pressed={active}
         ></button>
@@ -179,6 +208,15 @@
     {/if}
   </div>
 </div>
+
+{#if contextMenu}
+  <div class="ctx-root" use:portal>
+    <div class="ctx-backdrop" onmousedown={closeContextMenu} oncontextmenu={(e) => e.preventDefault()} role="presentation"></div>
+    <div class="ctx-menu" style="left:{contextMenu.x}px; top:{contextMenu.y}px;" role="menu">
+      <button class="ctx-item ctx-item--danger" role="menuitem" onclick={deleteChannel}>Delete channel</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .ch-row {
@@ -294,4 +332,45 @@
   .step:hover:not(.step--on) { filter: brightness(1.4); }
 
   .step--playing { outline: 2px solid rgba(255,255,255,0.55); outline-offset: -2px; }
+
+  /* Context menu */
+  .ctx-root {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+  }
+
+  .ctx-backdrop {
+    position: absolute;
+    inset: 0;
+  }
+
+  .ctx-menu {
+    position: fixed;
+    background: #242424;
+    border: 1px solid var(--explorer-border, #333);
+    border-radius: 5px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    min-width: 140px;
+    padding: 3px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ctx-item {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    text-align: left;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.08s, color 0.08s;
+  }
+
+  .ctx-item--danger:hover {
+    background: rgba(220,50,50,0.18);
+    color: #ff6b6b;
+  }
 </style>

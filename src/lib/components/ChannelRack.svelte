@@ -93,6 +93,15 @@
     lastSelectedIdx = i;
   }
 
+  function handleDelete(id: number) {
+    channelStore.removeChannel(id);
+    if (selectedIds.has(id)) {
+      const next = new Set(selectedIds);
+      next.delete(id);
+      selectedIds = next;
+    }
+  }
+
   function close() { show = false; }
 </script>
 
@@ -344,6 +353,7 @@
           audioEngine.preloadChannel(target);
         }}
         onOpenPianoRoll={() => onOpenPianoRoll(ch.id)}
+        onDelete={() => handleDelete(ch.id)}
       />
     {/each}
   </div>

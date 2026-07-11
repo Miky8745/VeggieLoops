@@ -117,6 +117,19 @@ class ChannelStore {
     this.channels.push(makeChannel(nextId++));
   }
 
+  // Removes a channel's settings and every pattern's stashed content for
+  // it. The currently-active pattern's content lives directly on the
+  // channel object being dropped, so no separate cleanup is needed there.
+  removeChannel(id: number) {
+    this.channels = this.channels.filter(c => c.id !== id);
+    for (const chMap of this.#patternContent.values()) {
+      chMap.delete(id);
+    }
+    if (this.selectedChannelId === id) {
+      this.selectedChannelId = null;
+    }
+  }
+
   get selectedChannel(): ChannelData | null {
     return this.channels.find(c => c.id === this.selectedChannelId) ?? null;
   }
