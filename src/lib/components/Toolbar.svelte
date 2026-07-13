@@ -41,6 +41,11 @@
     else if (!windowFocus.isFrontmost('playlist')) windowFocus.focus('playlist');
     else showPlaylist = false;
   }
+  function toggleMixer() {
+    if (!showMixer) { showMixer = true; windowFocus.focus('mixer'); }
+    else if (!windowFocus.isFrontmost('mixer')) windowFocus.focus('mixer');
+    else showMixer = false;
+  }
 
   // Transport
   let isPaused    = $state(false);
@@ -286,7 +291,7 @@
     </button>
 
     <!-- Mixer -->
-    <button class="tb-pb" class:tb-pb--on={showMixer} onclick={() => showMixer = !showMixer} title="Mixer">
+    <button class="tb-pb" class:tb-pb--on={showMixer} onclick={toggleMixer} title="Mixer">
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true">
         <line x1="2"   y1="0" x2="2"   y2="13"/>
         <circle cx="2"   cy="4" r="1.4" fill="currentColor" stroke="none"/>

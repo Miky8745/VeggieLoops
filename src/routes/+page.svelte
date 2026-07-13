@@ -11,6 +11,7 @@
   import Playlist from '$lib/components/Playlist.svelte';
   import ChannelRack from '$lib/components/ChannelRack.svelte';
   import PianoRoll from '$lib/components/PianoRoll.svelte';
+  import Mixer from '$lib/components/mixer/Mixer.svelte';
   import ProjectShortcuts from '$lib/components/ProjectShortcuts.svelte';
   import { channelStore } from '$lib/channelStore.svelte';
   import { historyStore } from '$lib/historyStore.svelte';
@@ -165,6 +166,7 @@
       }}
     />
     <PianoRoll bind:show={showPianoRoll} {workspaceBounds} bind:showPianoRollOverview />
+    <Mixer bind:show={showMixer} {workspaceBounds} />
   </div>
 {/if}
 
