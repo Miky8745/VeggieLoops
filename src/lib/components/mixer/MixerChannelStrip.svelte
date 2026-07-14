@@ -46,9 +46,17 @@
   </button>
 
   <div class="strip-ports">
-    <JackPort kind="in" trackId={data.id} connected={inConnected} {onPortMount} {onPortUnmount} {onPortDown} />
+    <JackPort
+      kind="in" trackId={data.id} connected={inConnected}
+      bind:portState={data.inPortState} bind:level={data.inSendLevel}
+      {onPortMount} {onPortUnmount} {onPortDown}
+    />
     {#if variant !== 'master'}
-      <JackPort kind="out" trackId={data.id} connected={outConnected} {onPortMount} {onPortUnmount} {onPortDown} />
+      <JackPort
+        kind="out" trackId={data.id} connected={outConnected}
+        bind:portState={data.outPortState} bind:level={data.outSendLevel}
+        {onPortMount} {onPortUnmount} {onPortDown}
+      />
     {/if}
   </div>
 </div>

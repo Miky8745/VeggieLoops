@@ -9,10 +9,18 @@
 // carrying forward for whoever wires real channel-to-mixer-track routing.
 export const MASTER_TRACK_ID = 0;
 
+// A jack port's visual/interaction mode — see JackPort.svelte. Cycled via
+// right-click: passive -> sending -> knob -> passive.
+export type PortState = 'passive' | 'sending' | 'knob';
+
 export interface MixerChannelData {
   id: number;
   volume: number;       // 0..2, unity ~0.8 — matches ChannelData.volume's convention
   filterEnabled: boolean;
+  inPortState: PortState;
+  outPortState: PortState;
+  inSendLevel: number;   // 0..1 (0-100%), only meaningful while inPortState === 'knob'
+  outSendLevel: number;  // 0..1 (0-100%), only meaningful while outPortState === 'knob'
 }
 
 export interface MixerConnection {
@@ -30,7 +38,15 @@ const INITIAL_CHANNEL_COUNT = 10;
 const FILTER_SLOT_COUNT = 10;
 
 function makeChannel(id: number): MixerChannelData {
-  return { id, volume: 0.8, filterEnabled: false };
+  return {
+    id,
+    volume: 0.8,
+    filterEnabled: false,
+    inPortState: 'passive',
+    outPortState: 'passive',
+    inSendLevel: 1,
+    outSendLevel: 1,
+  };
 }
 
 let nextChannelId = 1;
@@ -38,7 +54,15 @@ let nextConnectionId = 1;
 let nextFilterSlotId = 1;
 
 class MixerStore {
-  master = $state<MixerChannelData>({ id: MASTER_TRACK_ID, volume: 0.8, filterEnabled: false });
+  master = $state<MixerChannelData>({
+    id: MASTER_TRACK_ID,
+    volume: 0.8,
+    filterEnabled: false,
+    inPortState: 'passive',
+    outPortState: 'passive',
+    inSendLevel: 1,
+    outSendLevel: 1,
+  });
 
   channels = $state<MixerChannelData[]>(
     Array.from({ length: INITIAL_CHANNEL_COUNT }, () => makeChannel(nextChannelId++)),

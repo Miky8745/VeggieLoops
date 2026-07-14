@@ -183,8 +183,6 @@
   {/snippet}
 
   <div class="mixer-body">
-    <!-- TEMP DEBUG: isolating the load/freeze issue — Master strip is back
-         in; channels/cables/filters stay commented. Restore once diagnosed. -->
     <div class="cable-zone" bind:this={cableZoneEl}>
       <MixerChannelStrip
         variant="master"
@@ -195,7 +193,6 @@
 
       <div class="v-divider"></div>
 
-      <!--
       <div class="channels-scroll" bind:this={channelScrollEl} onscroll={onChannelScroll}>
         {#each mixerStore.channels as ch (ch.id)}
           <MixerChannelStrip
@@ -210,10 +207,8 @@
       </div>
 
       <MixerCables {paths} {dragPath} />
-      -->
     </div>
 
-    <!--
     <div class="v-divider"></div>
 
     <div class="filter-rack">
@@ -224,7 +219,6 @@
         {/each}
       </div>
     </div>
-    -->
   </div>
 </FloatingWindow>
 
@@ -289,11 +283,6 @@
     display: flex;
     background: var(--main-bg, #1a1a1a);
     overflow: hidden;
-    /* TEMP DEBUG: disables all pointer interaction inside the mixer body
-       (sliders, buttons, jacks) while keeping everything visible, to isolate
-       whether the load-then-unresponsive symptom comes from the interactive
-       JS wiring or just from rendering the elements. Revert once diagnosed. */
-    pointer-events: none;
   }
 
   .cable-zone {
